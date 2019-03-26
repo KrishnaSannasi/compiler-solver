@@ -2,9 +2,7 @@
 use super::{Solver, Rule, InfVar, Quant, Predicate};
 
 use std::collections::{VecDeque, HashMap, HashSet};
-
-use std::collections::hash_map::RandomState;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::Hash;
 
 #[derive(Debug)]
 struct RuleSet<T: Hash + Eq> {

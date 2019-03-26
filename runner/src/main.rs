@@ -1,4 +1,3 @@
-
 use solver::*;
 use std::collections::HashMap;
 
@@ -14,25 +13,22 @@ impl Type {
         match self {
             Type::Infer(..) => false,
             Type::Concrete(..) => true,
-            Type::App(_, x) => x.iter().fold(true, |acc, x| acc && x.is_concrete())
+            Type::App(_, x) => x.iter().fold(true, |acc, x| acc && x.is_concrete()),
         }
     }
     fn get_concrete(&self) -> Box<dyn Iterator<Item = Type>> {
         match self {
             Type::Infer(..) => Box::new(None.into_iter()),
             Type::Concrete(..) => Box::new(Some(self.clone()).into_iter()),
-            Type::App(_, x) => Box::new(
-                x.clone()
-                    .into_iter()
-                    .flat_map(|x| x.get_concrete())
-                    .chain(
-                        if self.is_concrete() {
-                            Some(self.clone())
-                        } else {
-                            None
-                        }
-                    )
-            ),
+            Type::App(_, x) => {
+                Box::new(x.clone().into_iter().flat_map(|x| x.get_concrete()).chain(
+                    if self.is_concrete() {
+                        Some(self.clone())
+                    } else {
+                        None
+                    },
+                ))
+            }
         }
     }
 }
@@ -154,10 +150,7 @@ impl Predicate for tc {
     }
 
     fn apply(&self, i: InfVar, r: &Self::Item) -> Self {
-        tc(
-            self.0.apply(i, r),
-            self.1.apply(i, r)
-        )
+        tc(self.0.apply(i, r), self.1.apply(i, r))
     }
 
     fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self::Item, InfVar>>> {
@@ -179,23 +172,24 @@ impl Predicate for tc {
 impl Type {
     fn apply(&self, i: InfVar, r: &Self) -> Self {
         match self {
-            &Type::Concrete(x)
-                => Type::Concrete(x),
-            &Type::App(x, ref rest)
-                => Type::App(x, rest.iter().map(|rule| rule.apply(i, r)).collect() ),
-            &Type::Infer(x)
-                => if x == i { r.clone() } else { Type::Infer(x) },
+            &Type::Concrete(x) => Type::Concrete(x),
+            &Type::App(x, ref rest) => {
+                Type::App(x, rest.iter().map(|rule| rule.apply(i, r)).collect())
+            }
+            &Type::Infer(x) => {
+                if x == i {
+                    r.clone()
+                } else {
+                    Type::Infer(x)
+                }
+            }
         }
     }
 
     fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self, InfVar>>> {
         match (self, other) {
-            (&Type::Infer(x), &Type::Infer(y)) => Some(hm!(
-                (x, Err(y))
-            )),
-            (&Type::Infer(x), y) => Some(hm!(
-                (x, Ok(y.clone()))
-            )),
+            (&Type::Infer(x), &Type::Infer(y)) => Some(hm!((x, Err(y)))),
+            (&Type::Infer(x), y) => Some(hm!((x, Ok(y.clone())))),
             (Type::Concrete(x), Type::Concrete(y)) if x == y => Some(Default::default()),
             (Type::App(x, rest_x), Type::App(y, rest_y)) if x == y => {
                 let mut map = HashMap::new();
@@ -215,8 +209,8 @@ impl Type {
                 }
 
                 Some(map)
-            },
-            _ => None
+            }
+            _ => None,
         }
     }
 }

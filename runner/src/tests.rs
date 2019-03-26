@@ -42,7 +42,7 @@ fn single_rule_is_consistent_2() {
 }
 
 #[test]
-fn single_rule_is_consistent_3() {    
+fn single_rule_is_consistent_3() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -76,7 +76,7 @@ fn single_rule_is_consistent_4() {
 }
 
 #[test]
-fn single_rule_is_consistent_5() {    
+fn single_rule_is_consistent_5() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
