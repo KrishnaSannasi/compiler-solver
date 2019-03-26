@@ -113,6 +113,9 @@ macro_rules! hm {
     }}
 }
 
+#[cfg(test)]
+mod tests;
+
 impl Predicate for tc {
     type Item = Type;
     type Iter = Box<dyn Iterator<Item = Type>>;
@@ -191,10 +194,9 @@ impl Type {
 
 fn main() -> Result<(), ()> {
     let mut solver = Solver::<tc>::new();
-    let mut ctx = Context::new();
 
     add_rules! {
-        ctx in solver;
+        in solver;
 
         // Transitivity
         // forall t {
@@ -222,14 +224,17 @@ fn main() -> Result<(), ()> {
         // cons tc(Type![f32], Type![Sized]);
 
         // cons tc(Type![Vec u32], Type![Default]);
+        cons tc(Type![f32], Type![Sized]);
         not(cons tc(Type![Vec f32], Type![Default]));
 
-        exists t {
-            cons tc(Type![Vec @t], Type![Default])
-        }
+        // forall t {
+        //     cons tc(Type![Vec @t], Type![Default])
+        // }
 
         exists t {
-            not(cons tc(Type![Vec @t], Type![Default]))
+            if (cons tc(Type![@t], Type![Sized])) {
+                not(cons tc(Type![Vec @t], Type![Default]))
+            }
         }
 
         // forall t {
