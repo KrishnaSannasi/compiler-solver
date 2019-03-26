@@ -1,7 +1,6 @@
+use super::{InfVar, Predicate, Quant, Rule, Solver};
 
-use super::{Solver, Rule, InfVar, Quant, Predicate};
-
-use std::collections::{VecDeque, HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
 #[derive(Debug)]
@@ -46,13 +45,20 @@ trait COpt<T>: Sized {
 struct CSome<T>(T);
 struct CNone;
 
-impl<T> COpt<T> for CSome<T> { fn call_with<F: FnOnce(T)>(self, f: F) { f(self.0) } }
+impl<T> COpt<T> for CSome<T> {
+    fn call_with<F: FnOnce(T)>(self, f: F) {
+        f(self.0)
+    }
+}
 impl<T> COpt<T> for CNone {}
 
 pub struct Token<'a>(&'a ());
 
 impl<P: Predicate> Solver<P>
-where P: std::fmt::Debug, P::Item: std::fmt::Debug {
+where
+    P: std::fmt::Debug,
+    P::Item: std::fmt::Debug,
+{
     pub fn is_consistent(&self) -> Option<Token<'_>> {
         if self.is_consistent_inner(CNone) {
             Some(Token(&()))
@@ -60,7 +66,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
             None
         }
     }
-    
+
     pub fn is_consistent_with_rule(&self, rule: Rule<P>, _: &Token<'_>) -> bool {
         self.is_consistent_inner(CSome(rule))
     }
@@ -77,8 +83,8 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
             return match rules[0].0 {
                 Rule::Quantifier(Quant::Exists, ..) => false,
                 Rule::And(..) => unreachable!(),
-                _ => true
-            }
+                _ => true,
+            };
         }
 
         new_rule.call_with(|x| rules.push_back((x, 1)));
@@ -97,11 +103,14 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         for (rule, _) in rules.iter() {
             registered_items.extend(rule.items());
         }
-        
+
         // let registered_items = dbg!(registered_items);
 
         while let Some((rule, count)) = rules.pop_front() {
-            if count > 1000 { dbg!(rules.len()); panic!(); } // for terminating outdated rules
+            if count > 1000 {
+                dbg!(rules.len());
+                panic!();
+            } // for terminating outdated rules
 
             println!("=================================================================\n");
             match dbg!(rule) {
@@ -115,7 +124,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
 
                     concrete_rules[true].insert(x);
                     concrete_rules.clear();
-                },
+                }
 
                 Rule::False(x) => {
                     dbg!("false");
@@ -126,14 +135,14 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
 
                     concrete_rules[false].insert(x);
                     concrete_rules.clear();
-                },
+                }
 
                 Rule::And(box [x, y]) => {
                     dbg!("and");
 
                     rules.push_back((x, 1));
                     rules.push_back((y, 1));
-                },
+                }
 
                 Rule::Quantifier(Quant::ForAll, t, box rule) => {
                     dbg!("quantifier forall");
@@ -141,38 +150,46 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     let iter = if let Some(iter) = quantifier_forall.get_mut(&rule) {
                         iter
                     } else {
-                        quantifier_forall.entry(rule.clone())
-                                          .or_insert_with(|| registered_items.clone().into_iter())
+                        quantifier_forall
+                            .entry(rule.clone())
+                            .or_insert_with(|| registered_items.clone().into_iter())
                     };
-                    
+
                     if let Some(item) = iter.next() {
                         rules.push_back((rule.apply(t, &item), 1));
 
-                        rules.push_back((
-                            Rule::Quantifier(Quant::ForAll, t, Box::new(rule)),
-                            count
-                        ));
+                        rules
+                            .push_back((Rule::Quantifier(Quant::ForAll, t, Box::new(rule)), count));
                     } else {
                         quantifier_forall.remove(&rule);
                     }
-                },
+                }
 
                 Rule::Quantifier(Quant::Exists, t, box rule) => {
                     dbg!("quantifier exists");
 
-                    if concrete_rules.t.iter().cloned().all(|i| rule.unify(&Rule::True(i)).is_none())
-                    && concrete_rules.f.iter().cloned().all(|i| rule.unify(&Rule::False(i)).is_none()) {
+                    if concrete_rules
+                        .t
+                        .iter()
+                        .cloned()
+                        .all(|i| rule.unify(&Rule::True(i)).is_none())
+                        && concrete_rules
+                            .f
+                            .iter()
+                            .cloned()
+                            .all(|i| rule.unify(&Rule::False(i)).is_none())
+                    {
                         if concrete_rules.has_changed_existential.contains(&t) {
                             return false;
                         }
-                        
+
                         concrete_rules.has_changed_existential.insert(t);
                         rules.push_back((
                             Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
-                            count + 1
+                            count + 1,
                         ));
                     }
-                },
+                }
 
                 Rule::Implication(box [a, b]) => {
                     dbg!("implication");
@@ -189,7 +206,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                         // If it is false, then it doesn't matter what b is
                     } else if rules.iter().any(|x| match x.0 {
                         Rule::Implication(_) => false,
-                        _ => true
+                        _ => true,
                     }) {
                         dbg!(&rules);
                         // If a is not determined (some unknown variables)
@@ -198,12 +215,9 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                         // if there are no other rules, this there will be
                         // no progress to be made, as it is impossible to
                         // prove or disprove, so assume it is true
-                        rules.push_back((
-                            Rule::Implication(Box::new([a, b])),
-                            count + 1
-                        ));
+                        rules.push_back((Rule::Implication(Box::new([a, b])), count + 1));
                     }
-                },
+                }
             }
             concrete_rules = dbg!(concrete_rules);
         }
@@ -213,7 +227,10 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
 }
 
 impl<P: Predicate> Rule<P>
-where P: std::fmt::Debug, P::Item: std::fmt::Debug {
+where
+    P: std::fmt::Debug,
+    P::Item: std::fmt::Debug,
+{
     fn apply(&self, inf_var: InfVar, item: &P::Item) -> Self {
         println!("----------------");
         let v = dbg!(inf_var);
@@ -223,9 +240,11 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         let output = match this {
             Rule::True(x) => Rule::True(x.apply(v, i)),
             Rule::False(x) => Rule::False(x.apply(v, i)),
-            Rule::Implication(box [a, b]) => Rule::Implication(Box::new([a.apply(v, i), b.apply(v, i)])),
+            Rule::Implication(box [a, b]) => {
+                Rule::Implication(Box::new([a.apply(v, i), b.apply(v, i)]))
+            }
             Rule::And(box [a, b]) => Rule::And(Box::new([a.apply(v, i), b.apply(v, i)])),
-            Rule::Quantifier(..) => unimplemented!()
+            Rule::Quantifier(..) => unimplemented!(),
         };
 
         let output = dbg!(output);
@@ -239,8 +258,8 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         match (self, other) {
             (Rule::True(x), Rule::True(y)) => P::unify(x, y),
             (Rule::False(x), Rule::False(y)) => P::unify(x, y),
-            | (Rule::And(box [a, b]), Rule::And(box [c, d]))
-            | (Rule::Implication(box [a, b]), Rule::Implication(box [c ,d])) => {
+            (Rule::And(box [a, b]), Rule::And(box [c, d]))
+            | (Rule::Implication(box [a, b]), Rule::Implication(box [c, d])) => {
                 let mut first = Self::unify(a, c)?;
                 let second = Self::unify(b, d)?;
 
@@ -253,16 +272,15 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                 }
 
                 Some(first)
-            },
+            }
             (Rule::Quantifier(qa, _, binder_a), Rule::Quantifier(qb, _, binder_b)) => {
                 if qa != qb {
                     None
                 } else {
                     binder_a.unify(binder_b)
                 }
-            },
-            _ => None
-            
+            }
+            _ => None,
         }
     }
 
@@ -270,9 +288,15 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         match dbg!(self) {
             Rule::True(x) => set[true].contains(x),
             Rule::False(x) => set[false].contains(x),
-            Rule::Implication(box [a, b]) => if a.is_true(set) { b.is_true(set) } else { true },
+            Rule::Implication(box [a, b]) => {
+                if a.is_true(set) {
+                    b.is_true(set)
+                } else {
+                    true
+                }
+            }
             Rule::And(box [a, b]) => a.is_true(set) && b.is_true(set),
-            Rule::Quantifier(..) => unimplemented!()
+            Rule::Quantifier(..) => unimplemented!(),
         }
     }
 
@@ -282,19 +306,19 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
             Rule::False(x) => set[true].contains(x),
             Rule::Implication(box [a, b]) => a.is_true(set) && b.is_false(set),
             Rule::And(box [a, b]) => a.is_false(set) || b.is_false(set),
-            Rule::Quantifier(..) => unimplemented!()
+            Rule::Quantifier(..) => unimplemented!(),
         }
     }
 
     fn items<'a>(&'a self) -> Box<dyn 'a + Iterator<Item = P::Item>> {
         match self {
-            | Rule::True(x)
-            | Rule::False(x) => Box::new(x.items()),
+            Rule::True(x) | Rule::False(x) => Box::new(x.items()),
 
-            | Rule::Implication(box [a, b])
-            | Rule::And(box [a, b]) => Box::new(a.items().chain(b.items())),
+            Rule::Implication(box [a, b]) | Rule::And(box [a, b]) => {
+                Box::new(a.items().chain(b.items()))
+            }
 
-            Rule::Quantifier(_, _, box rule) => rule.items()
+            Rule::Quantifier(_, _, box rule) => rule.items(),
         }
     }
 }

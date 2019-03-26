@@ -14,7 +14,10 @@ pub trait Predicate: Clone + Hash + Eq {
 
     fn items(&self) -> Self::Iter;
     fn apply(&self, i: InfVar, item: &Self::Item) -> Self;
-    fn unify(&self, i: &Self) -> Option<std::collections::HashMap<InfVar, Result<Self::Item, InfVar>>>;
+    fn unify(
+        &self,
+        i: &Self,
+    ) -> Option<std::collections::HashMap<InfVar, Result<Self::Item, InfVar>>>;
 }
 
 pub trait TypeConstraint: Hash + Eq {}
@@ -28,7 +31,7 @@ pub struct Solver<P: Predicate> {
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Quant {
     ForAll,
-    Exists
+    Exists,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -46,7 +49,7 @@ pub enum Rule<P: Predicate> {
 
     Implication(Box<[Self; 2]>), // a -> b
     And(Box<[Self; 2]>),         // a and b
-    // Or(Box<[Self; 2]>),       // a or b === ~a -> b
+                                 // Or(Box<[Self; 2]>),       // a or b === ~a -> b
 }
 
 impl std::fmt::Debug for InfVar {
@@ -84,9 +87,11 @@ impl<I: Into<Rule<P>>, P: Predicate> RuleAdder<P> for I {
 }
 
 impl<P: Predicate, A, B> RuleAdder<P> for And<A, B>
-where A: RuleBuilder<Predicate = P> + RuleAdder<P>,
-      B: RuleBuilder<Predicate = P> + RuleAdder<P>,
-      Self: Into<Rule<P>> {
+where
+    A: RuleBuilder<Predicate = P> + RuleAdder<P>,
+    B: RuleBuilder<Predicate = P> + RuleAdder<P>,
+    Self: Into<Rule<P>>,
+{
     fn add_rule(self, solver: &mut Solver<P>) {
         self.0.add_rule(solver);
         self.1.add_rule(solver);

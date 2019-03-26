@@ -1,5 +1,4 @@
-
-use super::{Predicate, Rule, InfVar, Quant};
+use super::{InfVar, Predicate, Quant, Rule};
 
 pub struct ForAll;
 pub struct Exists;
@@ -33,10 +32,18 @@ impl<R: RuleBuilder> Binder<R> {
 pub trait RuleBuilder: Sized {
     type Predicate: Predicate;
 
-    fn not(self) -> Not<Self> { Not(self) }
-    fn implies<R: RuleBuilder>(self, other: R) -> Implication<Self, R> { Implication(self, other) }
-    fn and<R: RuleBuilder>(self, other: R) -> And<Self, R> { And(self, other) }
-    fn or<R: RuleBuilder>(self, other: R) -> Or<Self, R> { Or(self, other) }
+    fn not(self) -> Not<Self> {
+        Not(self)
+    }
+    fn implies<R: RuleBuilder>(self, other: R) -> Implication<Self, R> {
+        Implication(self, other)
+    }
+    fn and<R: RuleBuilder>(self, other: R) -> And<Self, R> {
+        And(self, other)
+    }
+    fn or<R: RuleBuilder>(self, other: R) -> Or<Self, R> {
+        Or(self, other)
+    }
 }
 
 #[allow(type_alias_bounds, dead_code)]
@@ -85,7 +92,7 @@ impl<P: Predicate> From<Not<Constraint<P>>> for Rule<P> {
 }
 
 // Cons($T, $C, $V) (rule)
-impl<P: Predicate>From<Constraint<P>> for Rule<P> {
+impl<P: Predicate> From<Constraint<P>> for Rule<P> {
     fn from(Constraint(p): Constraint<P>) -> Self {
         Rule::True(p)
     }
@@ -93,118 +100,106 @@ impl<P: Predicate>From<Constraint<P>> for Rule<P> {
 
 // Not(Quant(ForAll, $R)) -> Quant(Exists, Not($R)) (rule)
 impl<R: RuleBuilder> From<Not<Quantifier<ForAll, R>>> for RuleOf<R>
-where Not<R>: Into<Self> {
+where
+    Not<R>: Into<Self>,
+{
     fn from(Not(Quantifier(_, Binder(t, c))): Not<Quantifier<ForAll, R>>) -> Self {
-        Rule::Quantifier(
-            Quant::Exists, t,
-            Box::new(Not(c).into())
-        )
+        Rule::Quantifier(Quant::Exists, t, Box::new(Not(c).into()))
     }
 }
 
 // Quant(ForAll, $R) (rule)
 impl<R: RuleBuilder + Into<Self>> From<Quantifier<ForAll, R>> for RuleOf<R> {
     fn from(Quantifier(_, Binder(t, c)): Quantifier<ForAll, R>) -> Self {
-        Rule::Quantifier(
-            Quant::ForAll, t,
-            Box::new(c.into())
-        )
+        Rule::Quantifier(Quant::ForAll, t, Box::new(c.into()))
     }
 }
 
 // Not(Quant(Exists, $R)) -> Quant(ForAll, Not($R)) (rule)
 impl<R: RuleBuilder> From<Not<Quantifier<Exists, R>>> for RuleOf<R>
-where Not<R>: Into<Self> {
+where
+    Not<R>: Into<Self>,
+{
     fn from(Not(Quantifier(_, Binder(t, c))): Not<Quantifier<Exists, R>>) -> Self {
-        Rule::Quantifier(
-            Quant::ForAll, t,
-            Box::new(Not(c).into())
-        )
+        Rule::Quantifier(Quant::ForAll, t, Box::new(Not(c).into()))
     }
 }
 
 // Quant(Exists, $R) (rule)
 impl<R: RuleBuilder + Into<Self>> From<Quantifier<Exists, R>> for RuleOf<R> {
     fn from(Quantifier(_, Binder(t, c)): Quantifier<Exists, R>) -> Self {
-        Rule::Quantifier(
-            Quant::Exists, t,
-            Box::new(c.into())
-        )
+        Rule::Quantifier(Quant::Exists, t, Box::new(c.into()))
     }
 }
 
 // Not(Implies($a, $b)) -> And($a, Not($b)) (rule)
-impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Not<Implication<A, B>>> for RuleOf<A>
-where And<A, Not<B>>: Into<Self> {
+impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Not<Implication<A, B>>>
+    for RuleOf<A>
+where
+    And<A, Not<B>>: Into<Self>,
+{
     fn from(Not(Implication(a, b)): Not<Implication<A, B>>) -> Self {
-        And(
-            a,
-            b.not()
-        ).into()
+        And(a, b.not()).into()
     }
 }
 
 // Implies($a, $b) (rule)
-impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Implication<A, B>> for RuleOf<A> {
+impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Implication<A, B>>
+    for RuleOf<A>
+{
     fn from(Implication(a, b): Implication<A, B>) -> Self {
-        Rule::Implication(Box::new([
-            a.into(),
-            b.into()
-        ]))
+        Rule::Implication(Box::new([a.into(), b.into()]))
     }
 }
 
 // Not(And($a, $b)) -> Or(Not($a), Not($b)) (rule)
 impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Not<And<A, B>>> for RuleOf<A>
-where Or<Not<A>, Not<B>>: Into<Self> {
+where
+    Or<Not<A>, Not<B>>: Into<Self>,
+{
     fn from(Not(And(a, b)): Not<And<A, B>>) -> Self {
-        Or(
-            Not(a),
-            Not(b)
-        ).into()
+        Or(Not(a), Not(b)).into()
     }
 }
 
 // And($a, $b) (rule)
 impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<And<A, B>> for RuleOf<A> {
     fn from(r: And<A, B>) -> Self {
-        Rule::And(Box::new([
-            r.0.into(),
-            r.1.into()
-        ]))
+        Rule::And(Box::new([r.0.into(), r.1.into()]))
     }
 }
 
 // Not(Or($a, $b)) -> And(Not($a), Not($b)) (rule)
 impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Not<Or<A, B>>> for RuleOf<A>
-where And<Not<A>, Not<B>>: Into<Self> {
+where
+    And<Not<A>, Not<B>>: Into<Self>,
+{
     fn from(Not(Or(a, b)): Not<Or<A, B>>) -> Self {
-        And(
-            Not(a),
-            Not(b)
-        ).into()
+        And(Not(a), Not(b)).into()
     }
 }
 
 // Or($a, $b) -> Implies(Not($a), $b) (rule)
 impl<A: RuleBuilder + Into<Self>, B: RuleBuilder + Into<Self>> From<Or<A, B>> for RuleOf<A>
-where Implication<Not<A>, B>: Into<Self> {
+where
+    Implication<Not<A>, B>: Into<Self>,
+{
     fn from(Or(a, b): Or<A, B>) -> Self {
         // Rule::Or(Box::new([
         //     r.0.into(),
         //     r.1.into()
         // ]))
 
-        Implication(
-            Not(a),
-            b
-        ).into()
+        Implication(Not(a), b).into()
     }
 }
 
 // Or(Not($a), $b) -> Implies($a, $b)
 impl<A: RuleBuilder, B: RuleBuilder> From<Or<Not<A>, B>> for Implication<A, B>
-where Or<Not<A>, B>: RuleBuilder, Implication<A, B>: RuleBuilder {
+where
+    Or<Not<A>, B>: RuleBuilder,
+    Implication<A, B>: RuleBuilder,
+{
     fn from(or: Or<Not<A>, B>) -> Self {
         Implication((or.0).0, or.1)
     }
@@ -212,7 +207,10 @@ where Or<Not<A>, B>: RuleBuilder, Implication<A, B>: RuleBuilder {
 
 // Implies($a, $b) -> Or(Not($a), $b)
 impl<A: RuleBuilder, B: RuleBuilder> From<Implication<A, B>> for Or<Not<A>, B>
-where Or<Not<A>, B>: RuleBuilder, Implication<A, B>: RuleBuilder {
+where
+    Or<Not<A>, B>: RuleBuilder,
+    Implication<A, B>: RuleBuilder,
+{
     fn from(im: Implication<A, B>) -> Self {
         Self(Not(im.0), im.1)
     }
