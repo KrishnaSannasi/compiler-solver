@@ -1,5 +1,6 @@
 
 use solver::*;
+use std::collections::HashMap;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -88,6 +89,30 @@ macro_rules! Type {
     };
 }
 
+macro_rules! count {
+    () => { 0 };
+    ($($a:expr, $_:expr),*) => {
+        count!($($a),*) << 1
+    };
+    ($_:expr $(,$a:expr)*) => {
+        1 + count!($($a),*)
+    };
+}
+
+macro_rules! hm {
+    (
+        $( ($key:expr, $value:expr) )*
+    ) => {{
+        let mut map = std::collections::HashMap::with_capacity(count!($($key),*));
+
+        $(
+            map.insert($key, $value);
+        )*
+
+        map
+    }}
+}
+
 impl Predicate for tc {
     type Item = Type;
     type Iter = Box<dyn Iterator<Item = Type>>;
@@ -102,6 +127,21 @@ impl Predicate for tc {
             self.1.apply(i, r)
         )
     }
+
+    fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self::Item, InfVar>>> {
+        let mut first = Type::unify(&self.0, &other.0)?;
+        let second = Type::unify(&self.0, &other.0)?;
+
+        for (k, v) in second {
+            let value = first.entry(k).or_insert_with(|| v.clone());
+
+            if *value != v {
+                return None;
+            }
+        }
+
+        Some(first)
+    }
 }
 
 impl Type {
@@ -113,6 +153,38 @@ impl Type {
                 => Type::App(x, rest.iter().map(|rule| rule.apply(i, r)).collect() ),
             &Type::Infer(x)
                 => if x == i { r.clone() } else { Type::Infer(x) },
+        }
+    }
+
+    fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self, InfVar>>> {
+        match (self, other) {
+            (&Type::Infer(x), &Type::Infer(y)) => Some(hm!(
+                (x, Err(y))
+            )),
+            (&Type::Infer(x), y) => Some(hm!(
+                (x, Ok(y.clone()))
+            )),
+            (Type::Concrete(x), Type::Concrete(y)) if x == y => Some(Default::default()),
+            (Type::App(x, rest_x), Type::App(y, rest_y)) if x == y => {
+                let mut map = HashMap::new();
+
+                if rest_x.len() != rest_y.len() {
+                    return None;
+                }
+
+                for (x, y) in rest_x.iter().zip(rest_y) {
+                    for (k, v) in x.unify(y)? {
+                        let value = map.entry(k).or_insert_with(|| v.clone());
+
+                        if *value != v {
+                            return None;
+                        }
+                    }
+                }
+
+                Some(map)
+            },
+            _ => None
         }
     }
 }
@@ -216,10 +288,10 @@ fn main() -> Result<(), ()> {
     println!("{:#?}", solver);
     // println!("{:#?}", check);
 
-    if let Some(token) = solver.is_consistent() {
+    if let Some(_token) = solver.is_consistent() {
         // let rule = rule!(ctx cons tc(Type![u32], Type![Sized]));
 
-        // println!("{:#?}", solver.is_consistent_with_rule(rule.into(), &token));
+        // println!("{:#?}", solver.is_consistent_with_rule(rule.into(), &_token));
         println!("CONSISTENT");
     } else {
         println!("NOT CONSISTENT");

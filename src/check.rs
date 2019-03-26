@@ -216,6 +216,37 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         output
     }
 
+    fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<P::Item, InfVar>>> {
+        match (self, other) {
+            (Rule::True(x), Rule::True(y)) => P::unify(x, y),
+            (Rule::False(x), Rule::False(y)) => P::unify(x, y),
+            | (Rule::And(box [a, b]), Rule::And(box [c, d]))
+            | (Rule::Implication(box [a, b]), Rule::Implication(box [c ,d])) => {
+                let mut first = Self::unify(a, c)?;
+                let second = Self::unify(b, d)?;
+
+                for (k, v) in second {
+                    let value = first.entry(k).or_insert_with(|| v.clone());
+
+                    if *value != v {
+                        return None;
+                    }
+                }
+
+                Some(first)
+            },
+            (Rule::Quantifier(qa, _, binder_a), Rule::Quantifier(qb, _, binder_b)) => {
+                if qa != qb {
+                    None
+                } else {
+                    binder_a.unify(binder_b)
+                }
+            },
+            _ => None
+            
+        }
+    }
+
     fn is_true(&self, set: &RuleSet<P>) -> bool {
         match dbg!(self) {
             Rule::True(x) => set[true].contains(x),
