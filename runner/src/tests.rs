@@ -12,9 +12,7 @@ fn empty_is_consistent() {
 }
 
 #[test]
-fn single_rule_is_consistent() {
-    // 1
-    
+fn single_rule_is_consistent_1() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -26,9 +24,10 @@ fn single_rule_is_consistent() {
     println!("{:#?}", solver);
 
     assert!(solver.is_consistent().is_some());
+}
 
-    // 2
-    
+#[test]
+fn single_rule_is_consistent_2() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -40,9 +39,10 @@ fn single_rule_is_consistent() {
     println!("{:#?}", solver);
 
     assert!(solver.is_consistent().is_some());
+}
 
-    // 3
-    
+#[test]
+fn single_rule_is_consistent_3() {    
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -56,9 +56,10 @@ fn single_rule_is_consistent() {
     println!("{:#?}", solver);
 
     assert!(solver.is_consistent().is_some());
+}
 
-    // 4
-    
+#[test]
+fn single_rule_is_consistent_4() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -72,9 +73,10 @@ fn single_rule_is_consistent() {
     println!("{:#?}", solver);
 
     assert!(solver.is_consistent().is_some());
+}
 
-    // 5
-    
+#[test]
+fn single_rule_is_consistent_5() {    
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -91,9 +93,7 @@ fn single_rule_is_consistent() {
 }
 
 #[test]
-fn single_exists_is_not_consistent() {
-    // 1
-
+fn single_exists_is_not_consistent_1() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -107,9 +107,10 @@ fn single_exists_is_not_consistent() {
     println!("{:#?}", solver);
 
     assert!(!solver.is_consistent().is_some());
-    
-    // 2
+}
 
+#[test]
+fn single_exists_is_not_consistent_2() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -160,7 +161,7 @@ fn consistent_for_all_2() {
         }
 
         cons tc(Type![u32], Type![Copy]);
-        cons tc(Type![u32], Type![Clone]);
+        cons tc(Type![u32], Type![Clone]); // this line is optional
     }
 
     println!("{:#?}", solver);
@@ -171,8 +172,6 @@ fn consistent_for_all_2() {
 #[allow(non_snake_case)]
 #[test]
 fn not_consistent_for_all() {
-    // 1
-    
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
