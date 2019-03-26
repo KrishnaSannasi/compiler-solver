@@ -2,13 +2,21 @@
 use super::{Solver, Rule, InfVar, Quant, Predicate};
 
 use std::collections::{VecDeque, HashMap, HashSet};
-use std::hash::Hash;
+
+use std::collections::hash_map::RandomState;
+use std::hash::{BuildHasher, Hash, Hasher};
 
 #[derive(Debug)]
 struct RuleSet<T: Hash + Eq> {
     t: HashSet<T>,
     f: HashSet<T>,
-    has_changed: HashSet<InfVar>
+    has_changed_existential: HashSet<InfVar>,
+}
+
+impl<T: Hash + Eq> RuleSet<T> {
+    fn clear(&mut self) {
+        self.has_changed_existential.clear();
+    }
 }
 
 impl<T: Hash + Eq> std::ops::Index<bool> for RuleSet<T> {
@@ -60,6 +68,8 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
     }
 
     fn is_consistent_inner<O: COpt<Rule<P>>>(&self, new_rule: O) -> bool {
+        dbg!(self);
+
         let mut rules: VecDeque<_> = self.rules.iter().map(|x| (x.clone(), 1)).collect();
 
         if rules.len() == 1 {
@@ -78,7 +88,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         let mut concrete_rules = RuleSet {
             t: HashSet::new(),
             f: HashSet::new(),
-            has_changed: HashSet::new(),
+            has_changed_existential: HashSet::new(),
         };
 
         let mut quantifier_forall = HashMap::new();
@@ -89,7 +99,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         for (rule, _) in rules.iter() {
             registered_items.extend(rule.items());
         }
-
+        
         // let registered_items = dbg!(registered_items);
 
         while let Some((rule, count)) = rules.pop_front() {
@@ -106,7 +116,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     }
 
                     concrete_rules[true].insert(x);
-                    concrete_rules.has_changed.clear();
+                    concrete_rules.clear();
                 },
 
                 Rule::False(x) => {
@@ -117,7 +127,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     }
 
                     concrete_rules[false].insert(x);
-                    concrete_rules.has_changed.clear();
+                    concrete_rules.clear();
                 },
 
                 Rule::And(box [x, y]) => {
@@ -150,16 +160,15 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                 },
 
                 Rule::Quantifier(Quant::Exists, t, box rule) => {
-                    // unimplemented!();
                     dbg!("quantifier exists");
 
                     if concrete_rules.t.iter().cloned().all(|i| rule.unify(&Rule::True(i)).is_none())
                     && concrete_rules.f.iter().cloned().all(|i| rule.unify(&Rule::False(i)).is_none()) {
-                        if concrete_rules.has_changed.contains(&t) {
+                        if concrete_rules.has_changed_existential.contains(&t) {
                             return false;
                         }
                         
-                        concrete_rules.has_changed.insert(t);
+                        concrete_rules.has_changed_existential.insert(t);
                         rules.push_back((
                             Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
                             count + 1
@@ -180,10 +189,14 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                         rules.push_back((b, 1))
                     } else if a.is_false(&concrete_rules) {
                         // If it is false, then it doesn't matter what b is
-                    } else if !rules.is_empty() {
+                    } else if rules.iter().any(|x| match x.0 {
+                        Rule::Implication(_) => false,
+                        _ => true
+                    }) {
+                        dbg!(&rules);
                         // If a is not determined (some unknown variables)
                         // then kick it down the queue, only if
-                        // there are other rules to process
+                        // there are other rules to process (non-implication rules)
                         // if there are no other rules, this there will be
                         // no progress to be made, as it is impossible to
                         // prove or disprove, so assume it is true

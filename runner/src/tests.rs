@@ -18,7 +18,7 @@ fn single_rule_is_consistent_1() {
     add_rules! {
         in solver;
 
-        cons tc(Type![u32], Type![Copy]);
+        cons tc!(u32: Copy);
     }
 
     println!("{:#?}", solver);
@@ -33,7 +33,7 @@ fn single_rule_is_consistent_2() {
     add_rules! {
         in solver;
 
-        not(cons tc(Type![u32], Type![Copy]));
+        not(cons tc!(u32: Copy));
     }
 
     println!("{:#?}", solver);
@@ -49,7 +49,7 @@ fn single_rule_is_consistent_3() {
         in solver;
 
         forall t {
-            cons tc(Type![u32], Type![Copy])
+            cons tc!(u32: Copy)
         }
     }
 
@@ -66,7 +66,7 @@ fn single_rule_is_consistent_4() {
         in solver;
 
         forall t {
-            not(cons tc(Type![@t], Type![Copy]))
+            not(cons tc!(@t: Copy))
         }
     }
 
@@ -82,8 +82,8 @@ fn single_rule_is_consistent_5() {
     add_rules! {
         in solver;
 
-        if (cons tc(Type![u32], Type![Copy])) {
-            not(cons tc(Type![u32], Type![Copy]))
+        if (cons tc!(u32: Copy)) {
+            not(cons tc!(u32: Copy))
         }
     }
 
@@ -100,7 +100,7 @@ fn single_exists_is_not_consistent_1() {
         in solver;
 
         exists t {
-            cons tc(Type![u32], Type![Copy])
+            cons tc!(u32: Copy)
         }
     }
 
@@ -117,7 +117,7 @@ fn single_exists_is_not_consistent_2() {
         in solver;
 
         exists t {
-            cons tc(Type![@t], Type![Copy])
+            cons tc!(@t: Copy)
         }
     }
 
@@ -135,10 +135,10 @@ fn consistent_for_all_1() {
         in solver;
 
         forall T {
-            cons tc(Type![@T], Type![Any])
+            cons tc!(@T: Any)
         }
 
-        cons tc(Type![u32], Type![Any]);
+        cons tc!(u32: Any);
     }
 
     println!("{:#?}", solver);
@@ -155,13 +155,13 @@ fn consistent_for_all_2() {
         in solver;
 
         forall T {
-            if ( cons tc(Type![@T], Type![Copy]) ) {
-                cons tc(Type![@T], Type![Clone])
+            if ( cons tc!(@T: Copy) ) {
+                cons tc!(@T: Clone)
             }
         }
 
-        cons tc(Type![u32], Type![Copy]);
-        cons tc(Type![u32], Type![Clone]); // this line is optional
+        cons tc!(u32: Copy);
+        cons tc!(u32: Clone); // this line is optional
     }
 
     println!("{:#?}", solver);
@@ -178,13 +178,129 @@ fn not_consistent_for_all() {
         in solver;
 
         forall T {
-            cons tc(Type![@T], Type![Any])
+            cons tc!(@T: Any)
         }
 
-        not(cons tc(Type![u32], Type![Any]));
+        not(cons tc!(u32: Any));
     }
 
     println!("{:#?}", solver);
 
     assert!(!solver.is_consistent().is_some());
+}
+
+#[test]
+fn consistent_multiple_implications_1() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            if ( cons tc!(@t: Foo) ) {
+                cons tc!(@t: Bar)
+            }
+        }
+
+        forall t {
+            if ( and (cons tc!(@t: Bar))
+                     (cons tc!(@t: Control)) ) {
+                cons tc!(@t: Tak)
+            }
+        }
+
+        // cons tc!(bool: Foo);
+        // cons tc!(bool: Control);
+
+        not(cons tc!(bool: Tak));
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_multiple_implications_2() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            if ( cons tc!(@t: Foo) ) {
+                cons tc!(@t: Bar)
+            }
+        }
+
+        forall t {
+            if ( and (cons tc!(@t: Bar))
+                     (cons tc!(@t: Control)) ) {
+                cons tc!(@t: Tak)
+            }
+        }
+
+        cons tc!(bool: Foo);
+        // cons tc!(bool: Control);
+
+        not(cons tc!(bool: Tak));
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_multiple_implications_3() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            if ( cons tc!(@t: Foo) ) {
+                cons tc!(@t: Bar)
+            }
+        }
+
+        forall t {
+            if ( and (cons tc!(@t: Bar))
+                     (cons tc!(@t: Control)) ) {
+                cons tc!(@t: Tak)
+            }
+        }
+
+        // cons tc!(bool: Foo);
+        cons tc!(bool: Control);
+
+        not(cons tc!(bool: Tak));
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn not_consistent_multiple_implications() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            if ( cons tc!(@t: Foo) ) {
+                cons tc!(@t: Bar)
+            }
+        }
+
+        forall t {
+            if ( and (cons tc!(@t: Bar))
+                     (cons tc!(@t: Control)) ) {
+                cons tc!(@t: Tak)
+            }
+        }
+
+        cons tc!(bool: Foo);
+        cons tc!(bool: Control);
+
+        not(cons tc!(bool: Tak));
+    }
+
+    assert!(!solver.is_consistent().is_some())
 }

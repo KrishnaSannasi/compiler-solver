@@ -89,6 +89,35 @@ macro_rules! Type {
     };
 }
 
+macro_rules! tc {
+    (@first [$($stack:tt)*] $first:ident $($rest:tt)*) => {
+        tc! { @first [$($stack)* $first ] $($rest)* }
+    };
+    (@first [$($stack:tt)*] @$first:ident $($rest:tt)*) => {
+        tc! { @first [$($stack)* @$first ] $($rest)* }
+    };
+    (@first [$($stack:tt)*] ($($inner:tt)*) $($rest:tt)*) => {
+        tc! { @first [$($stack)* ($($inner)*) ] $($rest)* }
+    };
+    (@first [$($stack:tt)*] : $($rest:tt)*) => {
+        tc! { @second [$($stack)*] [] $($rest)* }
+    };
+    (@second [$($f_stack:tt)*] [$($stack:tt)*] $first:ident $($rest:tt)*) => {
+        tc! { @second [$($f_stack)*] [$($stack)* $first] $($rest)* }
+    };
+    (@second [$($f_stack:tt)*] [$($stack:tt)*] @$first:ident $($rest:tt)*) => {
+        tc! { @second [$($f_stack)*] [$($stack)* @$first] $($rest)* }
+    };
+    (@second [$($f_stack:tt)*] [$($stack:tt)*] ($($inner:tt)*) $($rest:tt)*) => {
+        tc! { @second [$($f_stack)*] [$($stack)* ($($inner)*)] $($rest)* }
+    };
+    (@second [$($f_stack:tt)*] [$($stack:tt)*]) => {
+        tc(Type![$($f_stack)*], Type![$($stack)*])
+    };
+    (@first $($rest:tt)*) => { compile_error!("invalid parse options!") };
+    ($($rest:tt)*) => { tc! { @first [] $($rest)* } };
+}
+
 macro_rules! count {
     () => { 0 };
     ($($a:expr, $_:expr),*) => {
@@ -192,117 +221,30 @@ impl Type {
     }
 }
 
-fn main() -> Result<(), ()> {
+fn main() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
         in solver;
 
-        // Transitivity
-        // forall t {
-        //     forall u {
-        //         forall v {
-        //             (and ((cons t) => (cons u))
-        //                  ((cons u) => (cons v))) =>
-        //             ((cons t) => (cons u))
-        //         }
-        //     }
-        // }
-
-        // cons "u32: Copy".to_string();
-        
-        // cons "bool: Copy".parse::<tc>().unwrap();
-        // not (cons "bool: Clone".parse::<tc>().unwrap());
-
-        // forall t {
-        //     (cons format!("{:?}: Copy", t).parse::<tc>().unwrap()) =>
-        //     (cons format!("{:?}: Clone", t).parse::<tc>().unwrap())
-        // }
-
-        // not (cons tc(Type![Vec u32], Type![Default]));
-        // cons tc(Type![u32], Type![Sized]);
-        // cons tc(Type![f32], Type![Sized]);
-
-        // cons tc(Type![Vec u32], Type![Default]);
-        cons tc(Type![f32], Type![Sized]);
-        not(cons tc(Type![Vec f32], Type![Default]));
-
-        // forall t {
-        //     cons tc(Type![Vec @t], Type![Default])
-        // }
-
-        exists t {
-            if (cons tc(Type![@t], Type![Sized])) {
-                not(cons tc(Type![Vec @t], Type![Default]))
+        forall t {
+            if ( cons tc!(@t: Foo) ) {
+                cons tc!(@t: Bar)
             }
         }
 
-        // forall t {
-        //     if (cons tc(Type![@t], Type![DynSized])) {
-        //         not(cons tc(Type![@t], Type![Sized]))
-        //     }
-        // }
+        forall t {
+            if ( and (cons tc!(@t: Bar))
+                     (cons tc!(@t: Control)) ) {
+                cons tc!(@t: Tak)
+            }
+        }
 
-        // forall t {
-        //     if (cons tc(Type![@t], Type![Sized])) {
-        //         not(cons tc(Type![@t], Type![DynSized]))
-        //     }
-        // }
+        // cons tc!(bool: Foo);
+        cons tc!(bool: Control);
 
-        // forall t {
-        //     if (cons tc(Type![@t], Type![Sized])) {
-        //         cons tc(Type![Vec @t], Type![Sized])
-        //     }
-        // }
-
-        // forall t {
-        //     if (cons tc(Type![@t], Type![Sized])) {
-        //         not (cons tc(Type![Vec @t], Type![Copy]))
-        //         // and (not (cons tc(Type![Vec @t], Type![Copy])))
-        //         //     (cons tc(Type![Vec @t], Type![Sized]))
-        //     }
-        // }
-
-        // cons tc(Type![u32], Type![Sized]);
-        // cons tc(Type![f32], Type![Sized]);
-        // cons tc(Type![bool], Type![Sized]);
-        // cons tc(Type![char], Type![Sized]);
-
-        // not(cons tc(Type![Vec (Vec (Vec bool))], Type![Sized]));
-        // not(cons tc(Type![Vec u32], Type![Sized]));
-        
-        // not(cons tc(Type![Vec (Vec u32)], Type![Default]))
-
-        // not(cons tc(Type![Vec char], Type![Sized]));
-
-        // forall t {
-        //     (cons format!("{:?}: Clone", t)) => (cons format!("Vec {:?}: Clone", t))
-        // }
-
-        // not(
-        //     exists t {
-        //         cons format!("Vec {:?}: Copy", t)
-        //     }
-        // )
+        not(cons tc!(bool: Tak));
     }
 
-    // let check: Rule<_> = rule!(
-    //     ctx cons "Vec u32: Clone".to_string()
-    // ).into();
-    
-    println!("{:#?}", solver);
-    // println!("{:#?}", check);
-
-    if let Some(_token) = solver.is_consistent() {
-        // let rule = rule!(ctx cons tc(Type![u32], Type![Sized]));
-
-        // println!("{:#?}", solver.is_consistent_with_rule(rule.into(), &_token));
-        println!("CONSISTENT");
-    } else {
-        println!("NOT CONSISTENT");
-    }
-
-    // solver.check(&check);
-
-    Ok(())
+    println!("{}", solver.is_consistent().is_some());
 }
