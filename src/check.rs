@@ -125,7 +125,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     };
                     
                     if let Some(item) = iter.next() {
-                        rules.push_back((rule.unify(t, &item), 1));
+                        rules.push_back((rule.apply(t, &item), 1));
 
                         rules.push_back((
                             Rule::Quantifier(Quant::ForAll, t, Box::new(rule)),
@@ -148,7 +148,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     };
                     
                     if let Some(item) = iter.next() {
-                        rules.push_back((rule.unify(t, &item), 1));
+                        rules.push_back((rule.apply(t, &item), 1));
 
                         rules.push_back((
                             Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
@@ -195,17 +195,17 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
 
 impl<P: Predicate> Rule<P>
 where P: std::fmt::Debug, P::Item: std::fmt::Debug {
-    fn unify(&self, inf_var: InfVar, item: &P::Item) -> Self {
+    fn apply(&self, inf_var: InfVar, item: &P::Item) -> Self {
         println!("----------------");
         let v = dbg!(inf_var);
         let i = dbg!(item);
         let this = dbg!(self);
 
         let output = match this {
-            Rule::True(x) => Rule::True(x.unify(v, i)),
-            Rule::False(x) => Rule::False(x.unify(v, i)),
-            Rule::Implication(box [a, b]) => Rule::Implication(Box::new([a.unify(v, i), b.unify(v, i)])),
-            Rule::And(box [a, b]) => Rule::And(Box::new([a.unify(v, i), b.unify(v, i)])),
+            Rule::True(x) => Rule::True(x.apply(v, i)),
+            Rule::False(x) => Rule::False(x.apply(v, i)),
+            Rule::Implication(box [a, b]) => Rule::Implication(Box::new([a.apply(v, i), b.apply(v, i)])),
+            Rule::And(box [a, b]) => Rule::And(Box::new([a.apply(v, i), b.apply(v, i)])),
             Rule::Quantifier(..) => unimplemented!()
         };
 

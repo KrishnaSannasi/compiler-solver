@@ -13,7 +13,7 @@ pub trait Predicate: Clone + Hash + Eq {
     type Iter: Iterator<Item = Self::Item>;
 
     fn items(&self) -> Self::Iter;
-    fn unify(&self, i: InfVar, item: &Self::Item) -> Self;
+    fn apply(&self, i: InfVar, item: &Self::Item) -> Self;
 }
 
 pub trait TypeConstraint: Hash + Eq {}

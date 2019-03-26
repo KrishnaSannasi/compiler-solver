@@ -96,21 +96,21 @@ impl Predicate for tc {
         self.0.get_concrete()
     }
 
-    fn unify(&self, i: InfVar, r: &Self::Item) -> Self {
+    fn apply(&self, i: InfVar, r: &Self::Item) -> Self {
         tc(
-            self.0.unify(i, r),
-            self.1.unify(i, r)
+            self.0.apply(i, r),
+            self.1.apply(i, r)
         )
     }
 }
 
 impl Type {
-    fn unify(&self, i: InfVar, r: &Self) -> Self {
+    fn apply(&self, i: InfVar, r: &Self) -> Self {
         match self {
             &Type::Concrete(x)
                 => Type::Concrete(x),
             &Type::App(x, ref rest)
-                => Type::App(x, rest.iter().map(|rule| rule.unify(i, r)).collect() ),
+                => Type::App(x, rest.iter().map(|rule| rule.apply(i, r)).collect() ),
             &Type::Infer(x)
                 => if x == i { r.clone() } else { Type::Infer(x) },
         }
@@ -149,7 +149,7 @@ fn main() -> Result<(), ()> {
         // cons tc(Type![u32], Type![Sized]);
         // cons tc(Type![f32], Type![Sized]);
 
-        cons tc(Type![Vec u32], Type![Default]);
+        // cons tc(Type![Vec u32], Type![Default]);
         not(cons tc(Type![Vec f32], Type![Default]));
 
         exists t {
