@@ -62,6 +62,17 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
     fn is_consistent_inner<O: COpt<Rule<P>>>(&self, new_rule: O) -> bool {
         let mut rules: VecDeque<_> = self.rules.iter().map(|x| (x.clone(), 1)).collect();
 
+        if rules.len() == 1 {
+            // lone existential quantifiers are always false,
+            // this is because they are equivilent to `or` and
+            // the base case for `or` is false
+            return match rules[0].0 {
+                Rule::Quantifier(Quant::Exists, ..) => false,
+                Rule::And(..) => unreachable!(),
+                _ => true
+            }
+        }
+
         new_rule.call_with(|x| rules.push_back((x, 1)));
 
         let mut concrete_rules = RuleSet {
@@ -79,9 +90,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
             registered_items.extend(rule.items());
         }
 
-        let registered_items = dbg!(registered_items);
-        
-        if rules.len() == 1 { return true; }
+        // let registered_items = dbg!(registered_items);
 
         while let Some((rule, count)) = rules.pop_front() {
             if count > 1000 { dbg!(rules.len()); panic!(); } // for terminating outdated rules
@@ -143,24 +152,6 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                 Rule::Quantifier(Quant::Exists, t, box rule) => {
                     // unimplemented!();
                     dbg!("quantifier exists");
-                    
-                    // let iter = if let Some(iter) = quantifier_exists.get_mut(&rule) {
-                    //     iter
-                    // } else {
-                    //     quantifier_exists.entry(rule.clone())
-                    //                       .or_insert_with(|| registered_items.clone().into_iter())
-                    // };
-                    
-                    // if let Some(item) = iter.next() {
-                    //     rules.push_back((rule.apply(t, &item), 1));
-
-                    //     rules.push_back((
-                    //         Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
-                    //         count
-                    //     ));
-                    // } else {
-                    //     quantifier_exists.remove(&rule);
-                    // }
 
                     if concrete_rules.t.iter().cloned().all(|i| rule.unify(&Rule::True(i)).is_none())
                     && concrete_rules.f.iter().cloned().all(|i| rule.unify(&Rule::False(i)).is_none()) {
@@ -174,12 +165,6 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                             count + 1
                         ));
                     }
-
-                    // for i in concrete_rules.t {
-                    //     let is_unified = rule.unify(&Rule::True(i));
-
-                        
-                    // }
                 },
 
                 Rule::Implication(box [a, b]) => {
@@ -291,7 +276,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
     }
 
     fn items<'a>(&'a self) -> Box<dyn 'a + Iterator<Item = P::Item>> {
-        match dbg!(self) {
+        match self {
             | Rule::True(x)
             | Rule::False(x) => Box::new(x.items()),
 

@@ -1,5 +1,5 @@
 
-use super::{Predicate, Rule, InfVar, Quant, Context};
+use super::{Predicate, Rule, InfVar, Quant};
 
 pub struct ForAll;
 pub struct Exists;
@@ -15,17 +15,14 @@ pub struct Not<A: RuleBuilder>(pub A);
 pub struct Binder<R: RuleBuilder>(InfVar, R);
 
 impl<R: RuleBuilder> Binder<R> {
-    pub fn new<F: for<'a> FnOnce(&'a mut Context, InfVar) -> R>(ctx: &mut Context, f: F) -> Self {
+    pub fn new<F: for<'a> FnOnce(InfVar) -> R>(f: F) -> Self {
         use std::sync::atomic::{AtomicUsize, Ordering};
 
         static VAR: AtomicUsize = AtomicUsize::new(0);
 
-        ctx.0 += 1;
         let var = InfVar(VAR.fetch_add(1, Ordering::Relaxed));
 
-        let rule = f(ctx, var);
-
-        ctx.0 -= 1;
+        let rule = f(var);
 
         // QUANT_ID.fetch_add(1, Ordering::SeqCst)
 
