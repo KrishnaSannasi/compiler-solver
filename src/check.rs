@@ -7,7 +7,8 @@ use std::hash::Hash;
 #[derive(Debug)]
 struct RuleSet<T: Hash + Eq> {
     t: HashSet<T>,
-    f: HashSet<T>
+    f: HashSet<T>,
+    has_changed: HashSet<InfVar>
 }
 
 impl<T: Hash + Eq> std::ops::Index<bool> for RuleSet<T> {
@@ -66,10 +67,11 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
         let mut concrete_rules = RuleSet {
             t: HashSet::new(),
             f: HashSet::new(),
+            has_changed: HashSet::new(),
         };
 
         let mut quantifier_forall = HashMap::new();
-        let mut quantifier_exists = HashMap::new();
+        // let mut quantifier_exists = HashMap::new();
 
         let mut registered_items = HashSet::new();
 
@@ -95,6 +97,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     }
 
                     concrete_rules[true].insert(x);
+                    concrete_rules.has_changed.clear();
                 },
 
                 Rule::False(x) => {
@@ -105,6 +108,7 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                     }
 
                     concrete_rules[false].insert(x);
+                    concrete_rules.has_changed.clear();
                 },
 
                 Rule::And(box [x, y]) => {
@@ -137,26 +141,45 @@ where P: std::fmt::Debug, P::Item: std::fmt::Debug {
                 },
 
                 Rule::Quantifier(Quant::Exists, t, box rule) => {
-                    unimplemented!();
+                    // unimplemented!();
                     dbg!("quantifier exists");
                     
-                    let iter = if let Some(iter) = quantifier_exists.get_mut(&rule) {
-                        iter
-                    } else {
-                        quantifier_exists.entry(rule.clone())
-                                          .or_insert_with(|| registered_items.clone().into_iter())
-                    };
+                    // let iter = if let Some(iter) = quantifier_exists.get_mut(&rule) {
+                    //     iter
+                    // } else {
+                    //     quantifier_exists.entry(rule.clone())
+                    //                       .or_insert_with(|| registered_items.clone().into_iter())
+                    // };
                     
-                    if let Some(item) = iter.next() {
-                        rules.push_back((rule.apply(t, &item), 1));
+                    // if let Some(item) = iter.next() {
+                    //     rules.push_back((rule.apply(t, &item), 1));
 
+                    //     rules.push_back((
+                    //         Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
+                    //         count
+                    //     ));
+                    // } else {
+                    //     quantifier_exists.remove(&rule);
+                    // }
+
+                    if concrete_rules.t.iter().cloned().all(|i| rule.unify(&Rule::True(i)).is_none())
+                    && concrete_rules.f.iter().cloned().all(|i| rule.unify(&Rule::False(i)).is_none()) {
+                        if concrete_rules.has_changed.contains(&t) {
+                            return false;
+                        }
+                        
+                        concrete_rules.has_changed.insert(t);
                         rules.push_back((
                             Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
-                            count
+                            count + 1
                         ));
-                    } else {
-                        quantifier_exists.remove(&rule);
                     }
+
+                    // for i in concrete_rules.t {
+                    //     let is_unified = rule.unify(&Rule::True(i));
+
+                        
+                    // }
                 },
 
                 Rule::Implication(box [a, b]) => {
