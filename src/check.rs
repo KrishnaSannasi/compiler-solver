@@ -109,6 +109,7 @@ where
         while let Some((rule, count)) = rules.pop_front() {
             if count > 1000 {
                 dbg!(rules.len());
+                dbg!(self);
                 panic!();
             } // for terminating outdated rules
 
@@ -168,41 +169,21 @@ where
                 Rule::Quantifier(Quant::Exists, t, box rule) => {
                     dbg!("quantifier exists");
 
-                    if concrete_rules
-                        .t
-                        .iter()
-                        .cloned()
-                        .all(|i| rule.unify(&Rule::True(i)).is_none())
-                        && concrete_rules
-                            .f
-                            .iter()
-                            .cloned()
-                            .all(|i| rule.unify(&Rule::False(i)).is_none())
-                    {
-                        if concrete_rules.has_changed_existential.contains(&t) {
-                            return false;
-                        }
-
-                        concrete_rules.has_changed_existential.insert(t);
-                        rules.push_back((
-                            Rule::Quantifier(Quant::Exists, t, Box::new(rule)),
-                            count + 1,
-                        ));
-                    }
+                    unimplemented!()
                 }
 
                 Rule::Implication(box [a, b]) => {
                     dbg!("implication");
-                    if a.is_true(&concrete_rules) {
+                    if a.eval(&concrete_rules).unwrap_or(false) {
                         // ~(a -> b) === a and ~b
-                        if b.is_false(&concrete_rules) {
+                        if !b.eval(&concrete_rules).unwrap_or(true) {
                             dbg!(concrete_rules);
                             return false;
                         }
                         // If it is true, then push the implication onto
                         // the queue, to be processed later
                         rules.push_back((b, 1))
-                    } else if a.is_false(&concrete_rules) {
+                    } else if !a.eval(&concrete_rules).unwrap_or(true) {
                         // If it is false, then it doesn't matter what b is
                     } else if rules.iter().any(|x| match x.0 {
                         Rule::Implication(_) => false,
@@ -231,13 +212,8 @@ where
     P: std::fmt::Debug,
     P::Item: std::fmt::Debug,
 {
-    fn apply(&self, inf_var: InfVar, item: &P::Item) -> Self {
-        println!("----------------");
-        let v = dbg!(inf_var);
-        let i = dbg!(item);
-        let this = dbg!(self);
-
-        let output = match this {
+    fn apply(&self, v: InfVar, i: &P::Item) -> Self {
+        match self {
             Rule::True(x) => Rule::True(x.apply(v, i)),
             Rule::False(x) => Rule::False(x.apply(v, i)),
             Rule::Implication(box [a, b]) => {
@@ -245,13 +221,7 @@ where
             }
             Rule::And(box [a, b]) => Rule::And(Box::new([a.apply(v, i), b.apply(v, i)])),
             Rule::Quantifier(..) => unimplemented!(),
-        };
-
-        let output = dbg!(output);
-
-        println!("----------------");
-
-        output
+        }
     }
 
     fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<P::Item, InfVar>>> {
@@ -284,28 +254,32 @@ where
         }
     }
 
-    fn is_true(&self, set: &RuleSet<P>) -> bool {
-        match dbg!(self) {
-            Rule::True(x) => set[true].contains(x),
-            Rule::False(x) => set[false].contains(x),
-            Rule::Implication(box [a, b]) => {
-                if a.is_true(set) {
-                    b.is_true(set)
-                } else {
-                    true
-                }
-            }
-            Rule::And(box [a, b]) => a.is_true(set) && b.is_true(set),
-            Rule::Quantifier(..) => unimplemented!(),
-        }
-    }
+    // fn is_true(&self, set: &RuleSet<P>) -> bool {
+    //     self.eval(set).unwrap_or(false)
+    // }
 
-    fn is_false(&self, set: &RuleSet<P>) -> bool {
-        match dbg!(self) {
-            Rule::True(x) => set[false].contains(x),
-            Rule::False(x) => set[true].contains(x),
-            Rule::Implication(box [a, b]) => a.is_true(set) && b.is_false(set),
-            Rule::And(box [a, b]) => a.is_false(set) || b.is_false(set),
+    // fn is_false(&self, set: &RuleSet<P>) -> bool {
+    //     !self.eval(set).unwrap_or(true)
+    // }
+
+    fn eval(&self, set: &RuleSet<P>) -> Option<bool> {
+        match self {
+            Rule::True(x) => if set[true].contains(x) {
+                Some(true)
+            } else if set[false].contains(x) {
+                Some(false)
+            } else {
+                None
+            },
+            Rule::False(x) => if set[false].contains(x) {
+                Some(true)
+            } else if set[true].contains(x) {
+                Some(false)
+            } else {
+                None
+            },
+            Rule::Implication(box [a, b]) => Some(!a.eval(set)? || b.eval(set)?),
+            Rule::And(box [a, b]) => Some(a.eval(set)? && b.eval(set)?),
             Rule::Quantifier(..) => unimplemented!(),
         }
     }
