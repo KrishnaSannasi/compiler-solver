@@ -221,23 +221,14 @@ fn main() {
     add_rules! {
         in solver;
 
-        forall t {
-            if ( cons tc!(@t: Foo) ) {
-                cons tc!(@t: Bar)
+        exists t {
+            if ( cons tc!(@t: Copy) ) {
+                cons tc!(@t: Clone)
             }
         }
 
-        forall t {
-            if ( and (cons tc!(@t: Bar))
-                     (cons tc!(@t: Control)) ) {
-                cons tc!(@t: Tak)
-            }
-        }
-
-        // cons tc!(bool: Foo);
-        cons tc!(bool: Control);
-
-        not(cons tc!(bool: Tak));
+        cons tc!(u32: Copy);
+        cons tc!(u32: Clone);
     }
 
     println!("{}", solver.is_consistent().is_some());
