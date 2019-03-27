@@ -345,7 +345,6 @@ fn consistent_exists_implication() {
     }
 
     assert!(solver.is_consistent().is_some());
-    panic!();
 }
 
 #[test]
@@ -389,3 +388,25 @@ fn not_consistent_exists_implication_2() {
 
     assert!(!solver.is_consistent().is_some())
 }
+
+// #[test]
+// fn not_consistent_exists_implication_3() {
+//     let mut solver = Solver::<tc>::new();
+
+//     add_rules! {
+//         in solver;
+
+//         exists t {
+//             if ( cons tc!(@t: Copy) ) {
+//                 cons tc!(@t: Clone)
+//             }
+//         }
+
+//         cons tc!(u32: Foo);
+        
+//         // not(cons tc!(u32: Clone));
+//         // cons tc!(u32: Clone);
+//     }
+
+//     assert!(!solver.is_consistent().is_some())
+// }
