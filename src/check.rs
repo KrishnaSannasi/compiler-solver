@@ -1,7 +1,6 @@
 use super::{InfVar, Predicate, Quant, Rule, Solver};
 
 use std::collections::HashSet;
-use std::hash::Hash;
 
 trait COpt<T>: Sized {
     fn call_with<F: FnOnce(T)>(self, _: F) {}

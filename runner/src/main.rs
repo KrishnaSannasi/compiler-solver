@@ -1,5 +1,4 @@
 use solver::*;
-use std::collections::HashMap;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -114,30 +113,6 @@ macro_rules! tc {
     ($($rest:tt)*) => { tc! { @first [] $($rest)* } };
 }
 
-macro_rules! count {
-    () => { 0 };
-    ($($a:expr, $_:expr),*) => {
-        count!($($a),*) << 1
-    };
-    ($_:expr $(,$a:expr)*) => {
-        1 + count!($($a),*)
-    };
-}
-
-macro_rules! hm {
-    (
-        $( ($key:expr, $value:expr) )*
-    ) => {{
-        let mut map = std::collections::HashMap::with_capacity(count!($($key),*));
-
-        $(
-            map.insert($key, $value);
-        )*
-
-        map
-    }}
-}
-
 #[cfg(test)]
 mod tests;
 
@@ -172,34 +147,6 @@ impl Type {
                     Type::Infer(x)
                 }
             }
-        }
-    }
-
-    fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self, InfVar>>> {
-        match (self, other) {
-            (&Type::Infer(x), &Type::Infer(y)) => Some(hm!((x, Err(y)))),
-            (&Type::Infer(x), y) => Some(hm!((x, Ok(y.clone())))),
-            (Type::Concrete(x), Type::Concrete(y)) if x == y => Some(Default::default()),
-            (Type::App(x, rest_x), Type::App(y, rest_y)) if x == y => {
-                let mut map = HashMap::new();
-
-                if rest_x.len() != rest_y.len() {
-                    return None;
-                }
-
-                for (x, y) in rest_x.iter().zip(rest_y) {
-                    for (k, v) in x.unify(y)? {
-                        let value = map.entry(k).or_insert_with(|| v.clone());
-
-                        if *value != v {
-                            return None;
-                        }
-                    }
-                }
-
-                Some(map)
-            }
-            _ => None,
         }
     }
 }
