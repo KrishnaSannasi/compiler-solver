@@ -40,6 +40,7 @@ where
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
             known_variables: &HashSet<P::Item>,
+            existential: bool,
         ) -> Option<()> where P::Item: std::fmt::Debug {
             struct OnDrop;
 
@@ -67,18 +68,25 @@ where
                     Rule::And(box [a, b]) => {
                         dbg!("and");
                         rules.push(a);
-                        is_consistent_inner(rules, axioms, known_variables)?;
+                        is_consistent_inner(rules, axioms, known_variables, existential)?;
                         rules.push(b);
-                        is_consistent_inner(rules, axioms, known_variables)?;
+                        is_consistent_inner(rules, axioms, known_variables, existential)?;
                     },
                     Rule::Implication(box [a, b]) => {
                         dbg!("implication");
 
                         if let Some(true) = dbg!(a.eval(&axioms)) {
                             match b.eval(&axioms) {
-                                Some(false) => return None, // if guaranteed false, then return false
-                                | None                      // if undetermined    , then return true
-                                | Some(true) => ()          // if guaranteed true , then return true
+                                // if guaranteed false, then return false
+                                Some(false) => return None,
+
+                                // if undetermined    , then return false if existential
+                                None if existential => return None,
+
+                                // if guaranteed true , then return true
+                                | Some(true)
+                                // if undetermined    , then return true if !existential
+                                | None => (),
                             }
                         }
                     },
@@ -87,7 +95,7 @@ where
                         
                         known_variables.iter().fold(Some(()), |is_true, var| {
                             rules.push(dbg!(rule.apply(t, var)));
-                            is_true.and_then(|()| dbg!(is_consistent_inner(rules, axioms, known_variables)))
+                            is_true.and_then(|()| dbg!(is_consistent_inner(rules, axioms, known_variables, existential)))
                         })?
                     },
                     Rule::Quantifier(Quant::Exists, t, box rule) => {
@@ -95,7 +103,7 @@ where
 
                         known_variables.iter().fold(None, |is_true, var| {
                             rules.push(dbg!(rule.apply(t, var)));
-                            is_true.or_else(|| dbg!(is_consistent_inner(rules, axioms, known_variables)))
+                            is_true.or_else(|| dbg!(is_consistent_inner(rules, axioms, known_variables, true)))
                         })?
                     }
                 }
@@ -131,7 +139,7 @@ where
             _ => ()
         }
 
-        is_consistent_inner(&mut rules, &mut Default::default(), dbg!(&known_variables)).is_some()
+        is_consistent_inner(&mut rules, &mut Default::default(), dbg!(&known_variables), false).is_some()
     }
 }
 

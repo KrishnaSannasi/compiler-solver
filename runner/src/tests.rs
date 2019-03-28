@@ -429,7 +429,6 @@ fn consistent_exists_implication_3() {
     }
 }
 
-#[ignore]
 #[test]
 fn not_consistent_exists_implication_2() {
     let mut solver = Solver::<tc>::new();
@@ -452,7 +451,6 @@ fn not_consistent_exists_implication_2() {
     assert!(!solver.is_consistent().is_some())
 }
 
-#[ignore]
 #[test]
 fn not_consistent_multi_exists_implication() {
     let mut solver = Solver::<tc>::new();
@@ -484,13 +482,13 @@ fn consistent_multi_exists_implication_1() {
 
         exists t {
             exists u {
-                if (cons tc!(@t: Clone)) {
+                if (cons tc!(@t: Copy)) {
                     cons tc!(Vec @u: Clone)
                 }
             }
         }
 
-        cons tc!(u32: Clone);
+        cons tc!(u32: Copy);
         cons tc!(Vec u32: Clone);
     }
 
