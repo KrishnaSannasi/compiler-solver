@@ -42,8 +42,7 @@ pub struct InfVar(usize);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Rule<P: Predicate> {
-    True(P),
-    False(P),
+    Axiom(P, bool),
 
     Quantifier(Quant, InfVar, Box<Rule<P>>), // forall / exists
 
