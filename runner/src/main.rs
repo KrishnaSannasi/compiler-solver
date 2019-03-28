@@ -35,7 +35,7 @@ impl Type {
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, PartialEq, Eq, Hash)]
-struct tc(Type, Type);
+struct tc(Type, Type, bool);
 
 impl std::fmt::Debug for tc {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -108,7 +108,7 @@ macro_rules! tc {
         tc! { @second [$($f_stack)*] [$($stack)* ($($inner)*)] $($rest)* }
     };
     (@second [$($f_stack:tt)*] [$($stack:tt)*]) => {
-        tc(Type![$($f_stack)*], Type![$($stack)*])
+        tc(Type![$($f_stack)*], Type![$($stack)*], true)
     };
     (@first $($rest:tt)*) => { compile_error!("invalid parse options!") };
     ($($rest:tt)*) => { tc! { @first [] $($rest)* } };
@@ -150,22 +150,11 @@ impl Predicate for tc {
     }
 
     fn apply(&self, i: InfVar, r: &Self::Item) -> Self {
-        tc(self.0.apply(i, r), self.1.apply(i, r))
+        tc(self.0.apply(i, r), self.1.apply(i, r), self.2)
     }
 
-    fn unify(&self, other: &Self) -> Option<HashMap<InfVar, Result<Self::Item, InfVar>>> {
-        let mut first = Type::unify(&self.0, &other.0)?;
-        let second = Type::unify(&self.0, &other.0)?;
-
-        for (k, v) in second {
-            let value = first.entry(k).or_insert_with(|| v.clone());
-
-            if *value != v {
-                return None;
-            }
-        }
-
-        Some(first)
+    fn not(&self) -> Self {
+        tc(self.0.clone(), self.1.clone(), !self.2)
     }
 }
 

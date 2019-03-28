@@ -87,14 +87,14 @@ impl<R: RuleBuilder + Into<RuleOf<R>>> From<Not<Not<R>>> for RuleOf<R> {
 // Not(Cons($T, $C, $V)) (rule)
 impl<P: Predicate> From<Not<Constraint<P>>> for Rule<P> {
     fn from(Not(Constraint(p)): Not<Constraint<P>>) -> Self {
-        Rule::Axiom(p, false)
+        Rule::Axiom(p.not())
     }
 }
 
 // Cons($T, $C, $V) (rule)
 impl<P: Predicate> From<Constraint<P>> for Rule<P> {
     fn from(Constraint(p): Constraint<P>) -> Self {
-        Rule::Axiom(p, true)
+        Rule::Axiom(p)
     }
 }
 

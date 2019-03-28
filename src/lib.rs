@@ -12,12 +12,13 @@ pub trait Predicate: Clone + Hash + Eq {
     type Item: Clone + Hash + Eq;
     type Iter: Iterator<Item = Self::Item>;
 
+    fn not(&self) -> Self;
     fn items(&self) -> Self::Iter;
     fn apply(&self, i: InfVar, item: &Self::Item) -> Self;
-    fn unify(
-        &self,
-        i: &Self,
-    ) -> Option<std::collections::HashMap<InfVar, Result<Self::Item, InfVar>>>;
+    // fn unify(
+    //     &self,
+    //     i: &Self,
+    // ) -> Option<std::collections::HashMap<InfVar, Result<Self::Item, InfVar>>>;
 }
 
 pub trait TypeConstraint: Hash + Eq {}
@@ -42,7 +43,7 @@ pub struct InfVar(usize);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Rule<P: Predicate> {
-    Axiom(P, bool),
+    Axiom(P),
 
     Quantifier(Quant, InfVar, Box<Rule<P>>), // forall / exists
 

@@ -126,6 +126,44 @@ fn single_exists_is_not_consistent_2() {
     assert!(!solver.is_consistent().is_some());
 }
 
+#[test]
+fn consistent_exists_1() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        exists t {
+            cons tc!(@t: Copy)
+        }
+
+        cons tc!(u32: Copy);
+    }
+
+    println!("{:#?}", solver);
+
+    assert!(solver.is_consistent().is_some());
+}
+
+#[test]
+fn not_consistent_exists_1() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        exists t {
+            cons tc!(@t: Copy)
+        }
+
+        not(cons tc!(u32: Copy));
+    }
+
+    println!("{:#?}", solver);
+
+    assert!(!solver.is_consistent().is_some());
+}
+
 #[allow(non_snake_case)]
 #[test]
 fn consistent_for_all_1() {
@@ -161,6 +199,7 @@ fn consistent_for_all_2() {
         }
 
         cons tc!(u32: Copy);
+        cons tc!(u32: Clone);
     }
 
     println!("{:#?}", solver);
@@ -261,6 +300,7 @@ fn consistent_multiple_implications_2() {
         }
 
         cons tc!(bool: Foo);
+        cons tc!(bool: Bar);
         // cons tc!(bool: Control);
 
         not(cons tc!(bool: Tak));
@@ -299,7 +339,7 @@ fn consistent_multiple_implications_3() {
 }
 
 #[test]
-fn not_consistent_multiple_implications() {
+fn consistent_for_all_multiple_implications() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -324,11 +364,11 @@ fn not_consistent_multiple_implications() {
         not(cons tc!(bool: Tak));
     }
 
-    assert!(!solver.is_consistent().is_some())
+    assert!(solver.is_consistent().is_some())
 }
 
 #[test]
-fn consistent_exists_implication() {
+fn consistent_exists_implication_1() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -348,7 +388,7 @@ fn consistent_exists_implication() {
 }
 
 #[test]
-fn not_consistent_exists_implication_1() {
+fn consistent_exists_implication_2() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -367,6 +407,29 @@ fn not_consistent_exists_implication_1() {
     assert!(solver.is_consistent().is_some())
 }
 
+#[test]
+fn consistent_exists_implication_3() {
+    for _ in 0..1_000 {
+        let mut solver = Solver::<tc>::new();
+
+        add_rules! {
+            in solver;
+
+            exists t {
+                if ( cons tc!(@t: Clone) ) {
+                    cons tc!(Vec @t: Clone)
+                }
+            }
+
+            cons tc!(u32: Copy);
+            cons tc!(Vec u32: Clone);
+        }
+
+        assert!(solver.is_consistent().is_some());
+    }
+}
+
+#[ignore]
 #[test]
 fn not_consistent_exists_implication_2() {
     let mut solver = Solver::<tc>::new();
@@ -389,24 +452,129 @@ fn not_consistent_exists_implication_2() {
     assert!(!solver.is_consistent().is_some())
 }
 
-// #[test]
-// fn not_consistent_exists_implication_3() {
-//     let mut solver = Solver::<tc>::new();
+#[ignore]
+#[test]
+fn not_consistent_multi_exists_implication() {
+    let mut solver = Solver::<tc>::new();
 
-//     add_rules! {
-//         in solver;
+    add_rules! {
+        in solver;
 
-//         exists t {
-//             if ( cons tc!(@t: Copy) ) {
-//                 cons tc!(@t: Clone)
-//             }
-//         }
+        exists t {
+            exists u {
+                if (cons tc!(@t: Clone)) {
+                    cons tc!(Vec @u: Clone)
+                }
+            }
+        }
 
-//         cons tc!(u32: Foo);
-        
-//         // not(cons tc!(u32: Clone));
-//         // cons tc!(u32: Clone);
-//     }
+        cons tc!(u32: Clone);
+        // cons tc!(Vec u32: Clone);
+    }
 
-//     assert!(!solver.is_consistent().is_some())
-// }
+    assert!(!solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_multi_exists_implication_1() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        exists t {
+            exists u {
+                if (cons tc!(@t: Clone)) {
+                    cons tc!(Vec @u: Clone)
+                }
+            }
+        }
+
+        cons tc!(u32: Clone);
+        cons tc!(Vec u32: Clone);
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_multi_exists_implication_2() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        exists t {
+            exists u {
+                if (cons tc!(@t: Clone)) {
+                    cons tc!(Vec @u: Clone)
+                }
+            }
+        }
+
+        cons tc!(Vec u32: Clone);
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_forall_exists_implication_1() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            exists u {
+                if (cons tc!(@t: Foo)) {
+                    cons tc!(Array @t @u: Foo)
+                }
+            }
+        }
+
+        cons tc!(Vec u32: Clone);
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_forall_implication() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            if (cons tc!(@t: Foo)) {
+                cons tc!(Vec @t: Foo)
+            }
+        }
+
+        cons tc!(u32: Foo);
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
+
+#[test]
+fn consistent_muti_forall_implication_2() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        forall t {
+            forall u {
+                if (cons tc!(@t: Foo)) {
+                    cons tc!(Array @t @u: Foo)
+                }
+            }
+        }
+
+        cons tc!(u32: Foo);
+    }
+
+    assert!(solver.is_consistent().is_some())
+}
