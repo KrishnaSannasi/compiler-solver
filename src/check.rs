@@ -18,11 +18,7 @@ impl<T> COpt<T> for CNone {}
 
 pub struct Token<'a>(&'a ());
 
-impl<P: Predicate> Solver<P>
-where
-    P: std::fmt::Debug,
-    P::Item: std::fmt::Debug,
-{
+impl<P: Predicate> Solver<P> {
     pub fn is_consistent(&self) -> Option<Token<'_>> {
         if self.is_consistent_raw(CNone) {
             Some(Token(&()))
@@ -36,46 +32,29 @@ where
     }
 
     fn is_consistent_raw<O: COpt<Rule<P>>>(&self, new_rule: O) -> bool {
-        fn is_consistent_inner<P: Predicate + std::fmt::Debug>(
+        fn is_consistent_inner<P: Predicate>(
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
             known_variables: &HashSet<P::Item>,
             existential: bool,
-        ) -> Option<()> where P::Item: std::fmt::Debug {
-            struct OnDrop;
-
-            impl Drop for OnDrop {
-                fn drop(&mut self) {
-                    println!("}}-");
-                }
-            }
-
+        ) -> Option<()> {
             while let Some(rule) = rules.pop() {
-                println!("-{{");
-                dbg!(&axioms);
-                let _x = OnDrop;
-
-                match dbg!(rule) {
+                match rule {
                     Rule::Axiom(x) => {
-                        dbg!("axiom");
                         if axioms.contains(&x.not()) {
-                            dbg!(axioms);
                             return None
                         } else {
                             axioms.insert(x);
                         }
                     },
                     Rule::And(box [a, b]) => {
-                        dbg!("and");
                         rules.push(a);
                         is_consistent_inner(rules, axioms, known_variables, existential)?;
                         rules.push(b);
                         is_consistent_inner(rules, axioms, known_variables, existential)?;
                     },
                     Rule::Implication(box [a, b]) => {
-                        dbg!("implication");
-
-                        if let Some(true) = dbg!(a.eval(&axioms)) {
+                        if let Some(true) = a.eval(&axioms) {
                             match b.eval(&axioms) {
                                 // if guaranteed false, then return false
                                 Some(false) => return None,
@@ -91,19 +70,15 @@ where
                         }
                     },
                     Rule::Quantifier(Quant::ForAll, t, box rule) => {
-                        dbg!("quant forall");
-                        
                         known_variables.iter().fold(Some(()), |is_true, var| {
-                            rules.push(dbg!(rule.apply(t, var)));
-                            is_true.and_then(|()| dbg!(is_consistent_inner(rules, axioms, known_variables, existential)))
+                            rules.push(rule.apply(t, var));
+                            is_true.and_then(|()| is_consistent_inner(rules, axioms, known_variables, existential))
                         })?
                     },
                     Rule::Quantifier(Quant::Exists, t, box rule) => {
-                        dbg!("quant exists");
-
                         known_variables.iter().fold(None, |is_true, var| {
-                            rules.push(dbg!(rule.apply(t, var)));
-                            is_true.or_else(|| dbg!(is_consistent_inner(rules, axioms, known_variables, true)))
+                            rules.push(rule.apply(t, var));
+                            is_true.or_else(|| is_consistent_inner(rules, axioms, known_variables, true))
                         })?
                     }
                 }
@@ -125,8 +100,6 @@ where
             Rule::Quantifier(..) => 0,
         });
 
-        dbg!(&rules);
-
         match rules.last() {
             | Some(Rule::Implication(..))
             | Some(Rule::Quantifier(..)) => {
@@ -139,15 +112,11 @@ where
             _ => ()
         }
 
-        is_consistent_inner(&mut rules, &mut Default::default(), dbg!(&known_variables), false).is_some()
+        is_consistent_inner(&mut rules, &mut Default::default(), &known_variables, false).is_some()
     }
 }
 
-impl<P: Predicate> Rule<P>
-where
-    P: std::fmt::Debug,
-    P::Item: std::fmt::Debug,
-{
+impl<P: Predicate> Rule<P> {
     fn apply(&self, v: InfVar, i: &P::Item) -> Self {
         match self {
             &Rule::Axiom(ref x) => Rule::Axiom(x.apply(v, i)),
