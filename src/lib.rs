@@ -17,10 +17,7 @@ pub trait Predicate: Clone + Hash + Eq + Debug {
     fn not(&self) -> Self;
     fn items(&self) -> Self::Iter;
     fn apply(&self, i: InfVar, item: &Self::Item) -> Self;
-    // fn unify(
-    //     &self,
-    //     i: &Self,
-    // ) -> Option<std::collections::HashMap<InfVar, Result<Self::Item, InfVar>>>;
+    fn matches(&self, other: &Self) -> bool;
 }
 
 pub trait TypeConstraint: Hash + Eq {}

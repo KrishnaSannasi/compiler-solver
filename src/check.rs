@@ -87,21 +87,37 @@ impl<P: Predicate> Solver<P> {
                     Rule::Implication(box [a, b]) => {
                         dbg!("implication");
                         if let Some(true) = a.eval(&axioms) {
+                            fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, add_axiom: Rule<P>) {
+                                match dbg!(add_axiom) {
+                                    Rule::Axiom(x) => {
+                                        axioms.insert(x);
+                                    },
+                                    Rule::And(box [a, b]) => {
+                                        add_to_axioms(axioms, a);
+                                        add_to_axioms(axioms, b);
+                                    },
+                                    Rule::Implication(box [a, b]) => {
+                                        if let Some(true) = a.eval(&axioms) {
+                                            add_to_axioms(axioms, b)
+                                        }
+                                    },
+                                    Rule::Quantifier(..) => unimplemented!()
+                                }
+                            }
+
                             match dbg!(b.eval(&axioms)) {
                                 // if guaranteed false, then return false
                                 Some(false) => return None,
 
                                 // if guaranteed true , then return true
-                                Some(true) => (),
+                                Some(true) => add_to_axioms(axioms, b),
 
                                 // if undetermined    , then return false if existential
                                 // if undetermined    , then return true if !existential
                                 None => {
                                     H::handle()?;
 
-                                    if let Rule::Axiom(axiom) = dbg!(b) {
-                                        axioms.insert(axiom);
-                                    }
+                                    add_to_axioms(axioms, b);
                                 },
                             }
                         }
@@ -149,12 +165,45 @@ impl<P: Predicate> Solver<P> {
 
         new_rule.call_with(|x| rules.push(x));
 
-        rules.sort_by_key(|x| match x {
+        rules.sort_unstable_by_key(|x| match x {
             Rule::Axiom(..) => 3,
             Rule::And(_) => 2,
             Rule::Implication(..) => 1,
             Rule::Quantifier(..) => 0,
         });
+
+        /*
+         * This section does dependency analysis on the quantifiers
+         */
+        if let Some(index) = rules.iter().position(|x| if let Rule::Quantifier(..) = x { false } else { true }) {
+            let rules = &mut rules[..index];
+            
+            rules.sort_by(|x, y| {
+                use std::cmp::Ordering;
+
+                dbg!(match dbg!((x, y)) {
+                    (
+                        Rule::Quantifier(_, _, box Rule::Implication(box [a, b])),
+                        Rule::Quantifier(_, _, box Rule::Implication(box [c, d]))
+                    ) => {
+                        match dbg!((d.contains(a), b.contains(c))) {
+                            (true, true) => panic!(),
+                            (true, false) => Ordering::Less,
+                            (false, true) => Ordering::Greater,
+                            (false, false) => Ordering::Equal
+                        }
+                    },
+                    (Rule::Quantifier(..), Rule::Quantifier(..)) => {
+                        Ordering::Equal
+                    },
+                    _ => unreachable!()
+                })
+            })
+        }
+
+        dbg!("-----------------------------------------------------------------------------------");
+
+        dbg!(&rules);
 
         match rules.last() {
             Some(Rule::Implication(..)) | Some(Rule::Quantifier(..)) => {
@@ -167,7 +216,7 @@ impl<P: Predicate> Solver<P> {
             _ => (),
         }
 
-        let known_variables = rules.iter().flat_map(Rule::items).collect::<HashSet<_>>();
+        let known_variables = rules.iter().flat_map(Rule::items).collect();
 
         is_consistent_inner::<NotExistential, _>(
             &mut rules,
@@ -218,6 +267,35 @@ impl<P: Predicate> Rule<P> {
             }
 
             Rule::Quantifier(_, _, box rule) => rule.items(),
+        }
+    }
+
+    fn contains(&self, rule: &Self) -> bool {
+        if self == rule {
+            true
+        } else {
+            match dbg!(self) {
+                Rule::Axiom(s) => {
+                    match dbg!(rule) {
+                        Rule::Axiom(r) => s.matches(r),
+                        | Rule::Implication(box [a, b])
+                        | Rule::And(box [a, b]) => self.contains(a) || self.contains(b),
+                        Rule::Quantifier(_, _, rule) => self.contains(rule)
+                    }
+                },
+                Rule::And(box [a, b]) => a.contains(rule) || b.contains(rule),
+                Rule::Implication(box [a, b]) => {
+                    match dbg!(rule) {
+                        | Rule::And(..)
+                        | Rule::Axiom(..) => a.contains(rule) || b.contains(rule),
+                        Rule::Implication(box [c, d]) => a.contains(c) && b.contains(d),
+                        Rule::Quantifier(_, _, rule) => a.contains(rule) || b.contains(rule),
+                    }
+                },
+                Rule::Quantifier(..) => {
+                    unimplemented!()
+                }
+            }
         }
     }
 }

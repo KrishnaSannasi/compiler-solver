@@ -15,6 +15,7 @@ impl Type {
             Type::App(_, x) => x.iter().fold(true, |acc, x| acc && x.is_concrete()),
         }
     }
+
     fn get_concrete(&self) -> Box<dyn Iterator<Item = Type>> {
         match self {
             Type::Infer(..) => Box::new(None.into_iter()),
@@ -27,6 +28,21 @@ impl Type {
                         None
                     },
                 ))
+            }
+        }
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        if self == other {
+            true
+        } else {
+            match (self, other) {
+                (Type::Infer(..), Type::Infer(..)) => true,
+                (Type::App(x, rest_x), Type::App(y, rest_y)) => {
+                    x == y && rest_x.len() == rest_y.len() &&
+                    rest_x.iter().zip(rest_y).all(|(x, y)| x.matches(y))
+                },
+                _ => false
             }
         }
     }
@@ -134,6 +150,12 @@ impl Predicate for tc {
 
     fn not(&self) -> Self {
         tc(self.0.clone(), self.1.clone(), !self.2)
+    }
+
+    fn matches(&self, other: &Self) -> bool {
+        self.2 == other.2 &&
+        self.1.matches(&other.1) && 
+        self.0.matches(&other.0)
     }
 }
 

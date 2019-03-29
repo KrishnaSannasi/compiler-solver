@@ -339,32 +339,35 @@ fn consistent_multiple_implications_3() {
 }
 
 #[test]
-fn consistent_for_all_multiple_implications() {
-    let mut solver = Solver::<tc>::new();
+fn not_consistent_for_all_multiple_implications() {
+    for _ in 0..1000 {
+        let mut solver = Solver::<tc>::new();
 
-    add_rules! {
-        in solver;
+        add_rules! {
+            in solver;
 
-        forall t {
-            if ( cons tc!(@t: Foo) ) {
-                cons tc!(@t: Bar)
+            forall t {
+                if ( cons tc!(@t: Foo) ) {
+                    and (cons tc!(@t: Bar))
+                        (cons tc!(@t: Yam))
+                }
             }
+
+            forall t {
+                if ( and (cons tc!(@t: Bar))
+                        (cons tc!(@t: Control)) ) {
+                    cons tc!(@t: Tak)
+                }
+            }
+
+            cons tc!(bool: Foo);
+            cons tc!(bool: Control);
+
+            not(cons tc!(bool: Tak));
         }
 
-        forall t {
-            if ( and (cons tc!(@t: Bar))
-                     (cons tc!(@t: Control)) ) {
-                cons tc!(@t: Tak)
-            }
-        }
-
-        cons tc!(bool: Foo);
-        cons tc!(bool: Control);
-
-        not(cons tc!(bool: Tak));
+        assert!(!solver.is_consistent().is_some());
     }
-
-    assert!(!solver.is_consistent().is_some())
 }
 
 #[test]
@@ -602,4 +605,33 @@ fn not_consistent_multi_forall() {
     }
 
     assert!(!solver.is_consistent().is_some());
+}
+
+#[test]
+fn consistent_multi_forall() {
+    for _ in 0..1000 {
+        let mut solver = Solver::<tc>::new();
+
+        add_rules! {
+            in solver;
+
+            cons tc!(u32: Copy);
+
+            cons tc!(Vec u32: Clone);
+
+            forall t {
+                if (cons tc!(@t: Clone)) {
+                    cons tc!(Vec @t: Clone)
+                }
+            }
+
+            forall t {
+                if (cons tc!(@t: Copy)) {
+                    cons tc!(@t: Clone)
+                }
+            }
+        }
+
+        assert!(solver.is_consistent().is_some());
+    }
 }
