@@ -56,21 +56,21 @@ impl<P: Predicate> Solver<P> {
         fn is_consistent_inner<H: HandleImplicationUndetermined, P: Predicate>(
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
-            known_variables: &HashSet<P::Item>
+            known_variables: &HashSet<P::Item>,
         ) -> Option<()> {
             while let Some(rule) = rules.pop() {
                 match rule {
                     Rule::Axiom(x) => {
                         if axioms.contains(&x.not()) {
-                            return None
+                            return None;
                         } else {
                             axioms.insert(x);
                         }
-                    },
+                    }
                     Rule::And(box [a, b]) => {
                         rules.push(a);
                         rules.push(b);
-                    },
+                    }
                     Rule::Implication(box [a, b]) => {
                         if let Some(true) = a.eval(&axioms) {
                             match b.eval(&axioms) {
@@ -85,10 +85,11 @@ impl<P: Predicate> Solver<P> {
                                 None => H::handle()?,
                             }
                         }
-                    },
+                    }
                     Rule::Quantifier(Quant::ForAll, t, box rule) => {
                         for var in known_variables {
                             rules.push(rule.apply(t, var));
+
                             // This needs to be tested.
                             // The trade off of this line is
                             // will the number of variables or
@@ -96,7 +97,7 @@ impl<P: Predicate> Solver<P> {
                             // dominate performance?
                             is_consistent_inner::<H, _>(rules, axioms, known_variables)?;
                         }
-                    },
+                    }
                     Rule::Quantifier(Quant::Exists, t, box rule) => {
                         let mut iter = known_variables.iter();
 
@@ -105,8 +106,14 @@ impl<P: Predicate> Solver<P> {
 
                             rules.push(rule.apply(t, var));
 
-                            if is_consistent_inner::<Existential, _>(rules, axioms, known_variables).is_some() {
-                                break
+                            let is_inner_consistent = is_consistent_inner::<Existential, _>(
+                                rules,
+                                axioms,
+                                known_variables,
+                            );
+
+                            if is_inner_consistent.is_some() {
+                                break;
                             }
                         }
                     }
@@ -130,18 +137,22 @@ impl<P: Predicate> Solver<P> {
         });
 
         match rules.last() {
-            | Some(Rule::Implication(..))
-            | Some(Rule::Quantifier(..)) => {
+            Some(Rule::Implication(..)) | Some(Rule::Quantifier(..)) => {
                 for i in rules.iter() {
                     if let Rule::Quantifier(Quant::Exists, ..) = i {
-                        return false
+                        return false;
                     }
                 }
-            },
-            _ => ()
+            }
+            _ => (),
         }
 
-        is_consistent_inner::<NotExistential, _>(&mut rules, &mut Default::default(), &known_variables).is_some()
+        is_consistent_inner::<NotExistential, _>(
+            &mut rules,
+            &mut Default::default(),
+            &known_variables,
+        )
+        .is_some()
     }
 }
 
@@ -153,19 +164,23 @@ impl<P: Predicate> Rule<P> {
                 Rule::Implication(Box::new([a.apply(v, i), b.apply(v, i)]))
             }
             Rule::And(box [a, b]) => Rule::And(Box::new([a.apply(v, i), b.apply(v, i)])),
-            &Rule::Quantifier(q, qv, ref rule) => Rule::Quantifier(q, qv, Box::new(rule.apply(v, i))),
+            &Rule::Quantifier(q, qv, ref rule) => {
+                Rule::Quantifier(q, qv, Box::new(rule.apply(v, i)))
+            }
         }
     }
 
     fn eval(&self, axioms: &HashSet<P>) -> Option<bool> {
         match self {
-            &Rule::Axiom(ref x) => if axioms.contains(x) {
-                Some(true)
-            } else if axioms.contains(&x.not()) {
-                Some(false)
-            } else {
-                None
-            },
+            &Rule::Axiom(ref x) => {
+                if axioms.contains(x) {
+                    Some(true)
+                } else if axioms.contains(&x.not()) {
+                    Some(false)
+                } else {
+                    None
+                }
+            }
             Rule::Implication(box [a, b]) => Some(!a.eval(axioms)? || b.eval(axioms)?),
             Rule::And(box [a, b]) => Some(a.eval(axioms)? && b.eval(axioms)?),
             Rule::Quantifier(..) => unimplemented!(),
