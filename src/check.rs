@@ -178,6 +178,7 @@ impl<P: Predicate> Solver<P> {
 
         for (i, a) in rules.windows(2).enumerate() {
             let i = i + 1;
+
             let (a, b) = match a {
                 [a, b] => (a, b),
                 _ => unreachable!()
@@ -187,7 +188,6 @@ impl<P: Predicate> Solver<P> {
                 (Rule::Quantifier(q, ..), Rule::Quantifier(r, ..)) if q == r => (),
                 (Rule::Quantifier(Quant::Exists, ..), _) => {
                     exists_pos = Some(i);
-                    break
                 },
                 (Rule::Quantifier(Quant::ForAll, ..), _) => {
                     forall_pos = Some(i);
