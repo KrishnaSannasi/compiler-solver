@@ -35,14 +35,17 @@ impl<P: Predicate> Token<'_, P> {
     pub fn is_consistent_with_rule(&self, rule: Rule<P>) -> bool {
         let mut axioms = self.1.take();
 
-        match self.0.is_consistent_raw(CSome(rule, &axioms)) {
+        let ret = match self.0.is_consistent_raw(CSome(rule, &axioms)) {
             Some(new_axioms) => {
                 axioms.extend(new_axioms);
-                self.1.set(axioms);
                 true
             },
             None => false
-        }
+        };
+        
+        self.1.set(axioms);
+        
+        ret
     }
 }
 
