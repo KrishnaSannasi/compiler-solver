@@ -38,7 +38,11 @@ struct tc(Type, Type, bool);
 
 impl std::fmt::Debug for tc {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}: {:?}", self.0, self.1)
+        if self.2 {
+            write!(f, "{:?}: {:?}", self.0, self.1)
+        } else {
+            write!(f, "!({:?}: {:?})", self.0, self.1)
+        }
     }
 }
 

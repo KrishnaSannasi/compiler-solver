@@ -58,9 +58,21 @@ impl<P: Predicate> Solver<P> {
             axioms: &mut HashSet<P>,
             known_variables: &HashSet<P::Item>,
         ) -> Option<()> {
+            struct OnDrop;
+            impl Drop for OnDrop {
+                fn drop(&mut self) {
+                    println!("}}--", );
+                }
+            }
+
             while let Some(rule) = rules.pop() {
-                match rule {
+                println!("--{{", );
+                let _on_drop = OnDrop;
+                dbg!(&axioms);
+
+                match dbg!(rule) {
                     Rule::Axiom(x) => {
+                        dbg!("axiom");
                         if axioms.contains(&x.not()) {
                             return None;
                         } else {
@@ -68,12 +80,14 @@ impl<P: Predicate> Solver<P> {
                         }
                     }
                     Rule::And(box [a, b]) => {
+                        dbg!("and");
                         rules.push(a);
                         rules.push(b);
                     }
                     Rule::Implication(box [a, b]) => {
+                        dbg!("implication");
                         if let Some(true) = a.eval(&axioms) {
-                            match b.eval(&axioms) {
+                            match dbg!(b.eval(&axioms)) {
                                 // if guaranteed false, then return false
                                 Some(false) => return None,
 
@@ -82,32 +96,40 @@ impl<P: Predicate> Solver<P> {
 
                                 // if undetermined    , then return false if existential
                                 // if undetermined    , then return true if !existential
-                                None => H::handle()?,
+                                None => {
+                                    H::handle()?;
+
+                                    if let Rule::Axiom(axiom) = dbg!(b) {
+                                        axioms.insert(axiom);
+                                    }
+                                },
                             }
                         }
                     }
                     Rule::Quantifier(Quant::ForAll, inf_var, rule) => {
+                        dbg!("forall");
                         for var in known_variables {
-                            rules.push(rule.apply(inf_var, var));
+                            let rule = rule.apply(inf_var, var);
 
                             // This needs to be tested.
                             // The trade off of this line is
                             // will the number of variables or
                             // the number of forall quantifiers
                             // dominate performance?
-                            is_consistent_inner::<H, _>(rules, axioms, known_variables)?;
+                            dbg!(is_consistent_inner::<H, _>(&mut vec![rule], axioms, known_variables))?;
                         }
                     }
                     Rule::Quantifier(Quant::Exists, inf_var, rule) => {
+                        dbg!("exists");
                         let mut iter = known_variables.iter();
 
                         loop {
                             let var = iter.next()?;
 
-                            rules.push(rule.apply(inf_var, var));
+                            let rule = rule.apply(inf_var, var);
 
                             let is_inner_consistent = is_consistent_inner::<Existential, _>(
-                                rules,
+                                &mut vec![rule],
                                 axioms,
                                 known_variables,
                             );

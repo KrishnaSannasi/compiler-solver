@@ -8,8 +8,10 @@ pub use self::builder::*;
 
 mod check;
 
-pub trait Predicate: Clone + Hash + Eq {
-    type Item: Clone + Hash + Eq;
+use std::fmt::Debug;
+
+pub trait Predicate: Clone + Hash + Eq + Debug {
+    type Item: Clone + Hash + Eq + Debug;
     type Iter: Iterator<Item = Self::Item>;
 
     fn not(&self) -> Self;

@@ -364,7 +364,7 @@ fn consistent_for_all_multiple_implications() {
         not(cons tc!(bool: Tak));
     }
 
-    assert!(solver.is_consistent().is_some())
+    assert!(!solver.is_consistent().is_some())
 }
 
 #[test]
