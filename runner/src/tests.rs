@@ -631,7 +631,7 @@ fn consistent_multi_forall() {
                 }
             }
 
-            forall t {
+            exists t {
                 if (cons tc!(@t: Clone)) {
                     cons tc!(@t: Copy)
                 }
