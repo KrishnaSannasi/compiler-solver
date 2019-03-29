@@ -183,9 +183,7 @@ fn main() {
     add_rules! {
         in solver;
 
-        cons tc!(u32: Copy);
-
-        not(cons tc!(Vec u32: Clone));
+        cons tc!(u32: Foo);
 
         forall t {
             if (cons tc!(@t: Clone)) {
@@ -198,7 +196,11 @@ fn main() {
                 cons tc!(@t: Clone)
             }
         }
+        
+        exists t {
+            cons tc!(Vec @t: Clone)
+        }
     }
 
-    println!("{}", solver.is_consistent().is_some());
+    println!("{:?}", solver.is_consistent());
 }

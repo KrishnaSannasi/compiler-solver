@@ -25,6 +25,24 @@ impl<T, P> COpt<'_, T, P> for CNone {}
 pub struct Token<'a, P: Predicate>(&'a Solver<P>, Cell<HashSet<P>>);
 pub struct SyncToken<'a, P: Predicate>(&'a Solver<P>, RwLock<HashSet<P>>);
 
+impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for Token<'a, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let axioms = self.1.take();
+        write!(f, "Token({:?})", axioms)?;
+        self.1.set(axioms);
+        Ok(())
+    }
+}
+
+impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for SyncToken<'a, P> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.1.try_read() {
+            Ok(axioms) => write!(f, "SyncToken({:?})", axioms),
+            Err(..) => write!(f, "<SyncToken read failed>")
+        }
+    }
+}
+
 impl<'a, P: Predicate> From<Token<'a, P>> for SyncToken<'a, P> {
     fn from(Token(solver, axioms): Token<'a, P>) -> Self {
         Self(solver, RwLock::new(axioms.into_inner()))
@@ -117,19 +135,24 @@ impl<P: Predicate> Solver<P> {
                 match dbg!(rule) {
                     Rule::Axiom(x) => {
                         dbg!("axiom");
+                        
                         if axioms.contains(&x.not()) {
                             return None;
-                        } else {
-                            axioms.insert(x);
+                        } else if H::handle().is_some() {
+                            axioms.insert(dbg!(x));
+                        } else if !axioms.contains(&x) {
+                            return None;
                         }
                     }
                     Rule::And(box [a, b]) => {
                         dbg!("and");
+
                         rules.push(a);
                         rules.push(b);
                     }
                     Rule::Implication(box [a, b]) => {
                         dbg!("implication");
+                        
                         if let Some(true) = a.eval(&axioms) {
                             fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, add_axiom: Rule<P>) {
                                 match dbg!(add_axiom) {
@@ -154,7 +177,9 @@ impl<P: Predicate> Solver<P> {
                                 Some(false) => return None,
 
                                 // if guaranteed true , then return true
-                                Some(true) => add_to_axioms(axioms, b),
+                                Some(true) => if H::handle().is_some() {
+                                    add_to_axioms(axioms, b)
+                                },
 
                                 // if undetermined    , then return false if existential
                                 // if undetermined    , then return true if !existential
@@ -168,28 +193,33 @@ impl<P: Predicate> Solver<P> {
                     }
                     Rule::Quantifier(Quant::ForAll, inf_var, rule) => {
                         dbg!("forall");
+
+                        let mut rule_buffer = Vec::with_capacity(1);
+
                         for var in known_variables {
                             let rule = rule.apply(inf_var, var);
 
-                            // This needs to be tested.
-                            // The trade off of this line is
-                            // will the number of variables or
-                            // the number of forall quantifiers
-                            // dominate performance?
-                            dbg!(is_consistent_inner::<H, _>(&mut vec![rule], axioms, known_variables))?;
+                            rule_buffer.clear();
+                            rule_buffer.push(rule);
+                            
+                            dbg!(is_consistent_inner::<H, _>(&mut rule_buffer, axioms, known_variables))?;
                         }
                     }
                     Rule::Quantifier(Quant::Exists, inf_var, rule) => {
                         dbg!("exists");
                         let mut iter = known_variables.iter();
+                        let mut rule_buffer = Vec::with_capacity(1);
 
                         loop {
                             let var = iter.next()?;
 
                             let rule = rule.apply(inf_var, var);
 
+                            rule_buffer.clear();
+                            rule_buffer.push(rule);
+
                             let is_inner_consistent = is_consistent_inner::<Existential, _>(
-                                &mut vec![rule],
+                                &mut rule_buffer,
                                 axioms,
                                 known_variables,
                             );
@@ -321,7 +351,7 @@ impl<P: Predicate> Solver<P> {
             &known_variables,
         )?;
 
-        Some(axioms)
+        Some(dbg!(axioms))
     }
 }
 
