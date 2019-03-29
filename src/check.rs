@@ -234,9 +234,7 @@ impl<P: Predicate> Solver<P> {
 
         match dbg!((exists_pos, forall_pos)) {
             (Some(exists_pos), forall_pos) => {
-                if sort_rules_and_find_cycle(&mut rules[..exists_pos]) {
-                    return false;
-                }
+                sort_rules_and_find_cycle(&mut rules[..exists_pos]);
 
                 if let Some(forall_pos) = forall_pos {
                     if sort_rules_and_find_cycle(&mut rules[exists_pos..forall_pos]) {
