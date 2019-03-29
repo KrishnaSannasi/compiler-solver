@@ -166,20 +166,46 @@ impl<P: Predicate> Solver<P> {
         new_rule.call_with(|x| rules.push(x));
 
         rules.sort_unstable_by_key(|x| match x {
-            Rule::Axiom(..) => 3,
-            Rule::And(_) => 2,
-            Rule::Implication(..) => 1,
-            Rule::Quantifier(..) => 0,
+            Rule::Axiom(..) => 4,
+            Rule::And(_) => 3,
+            Rule::Implication(..) => 2,
+            Rule::Quantifier(Quant::ForAll, ..) => 1,
+            Rule::Quantifier(Quant::Exists, ..) => 0,
         });
 
-        /*
-         * This section does dependency analysis on the quantifiers
-         */
-        if let Some(index) = rules.iter().position(|x| if let Rule::Quantifier(..) = x { false } else { true }) {
-            let rules = &mut rules[..index];
+        let mut forall_pos = None;
+        let mut exists_pos = None;
+
+        for (i, a) in rules.windows(2).enumerate() {
+            let i = i + 1;
+            let (a, b) = match a {
+                [a, b] => (a, b),
+                _ => unreachable!()
+            };
+
+            match dbg!((a, b)) {
+                (Rule::Quantifier(q, ..), Rule::Quantifier(r, ..)) if q == r => (),
+                (Rule::Quantifier(Quant::Exists, ..), _) => {
+                    exists_pos = Some(i);
+                    break
+                },
+                (Rule::Quantifier(Quant::ForAll, ..), _) => {
+                    forall_pos = Some(i);
+                    break
+                },
+                _ => ()
+            }
+        }
+
+        fn sort_rules_and_find_cycle<P: Predicate>(rules: &mut [Rule<P>]) -> bool {
+            let mut found_cycle = false;
             
             rules.sort_by(|x, y| {
                 use std::cmp::Ordering;
+
+                if found_cycle {
+                    return Ordering::Equal;
+                }
 
                 dbg!(match dbg!((x, y)) {
                     (
@@ -187,7 +213,10 @@ impl<P: Predicate> Solver<P> {
                         Rule::Quantifier(_, _, box Rule::Implication(box [c, d]))
                     ) => {
                         match dbg!((d.contains(a), b.contains(c))) {
-                            (true, true) => panic!(),
+                            (true, true) => {
+                                found_cycle = true;
+                                Ordering::Equal
+                            },
                             (true, false) => Ordering::Less,
                             (false, true) => Ordering::Greater,
                             (false, false) => Ordering::Equal
@@ -198,7 +227,29 @@ impl<P: Predicate> Solver<P> {
                     },
                     _ => unreachable!()
                 })
-            })
+            });
+
+            found_cycle
+        }
+
+        match dbg!((exists_pos, forall_pos)) {
+            (Some(exists_pos), forall_pos) => {
+                if sort_rules_and_find_cycle(&mut rules[..exists_pos]) {
+                    return false;
+                }
+
+                if let Some(forall_pos) = forall_pos {
+                    if sort_rules_and_find_cycle(&mut rules[exists_pos..forall_pos]) {
+                        return false;
+                    }
+                }
+            },
+            (None, Some(forall_pos)) => {
+                if sort_rules_and_find_cycle(&mut rules[..forall_pos]) {
+                    return false;
+                }
+            }
+            (None, None) => ()
         }
 
         dbg!("-----------------------------------------------------------------------------------");
