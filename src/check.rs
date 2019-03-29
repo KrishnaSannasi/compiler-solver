@@ -32,11 +32,31 @@ impl<P: Predicate> Solver<P> {
     }
 
     fn is_consistent_raw<O: COpt<Rule<P>>>(&self, new_rule: O) -> bool {
-        fn is_consistent_inner<P: Predicate>(
+        struct Existential;
+        struct NotExistential;
+
+        trait HandleImplicationUndetermined {
+            fn handle() -> Option<()>;
+        }
+
+        impl HandleImplicationUndetermined for Existential {
+            #[inline(always)]
+            fn handle() -> Option<()> {
+                None
+            }
+        }
+
+        impl HandleImplicationUndetermined for NotExistential {
+            #[inline(always)]
+            fn handle() -> Option<()> {
+                Some(())
+            }
+        }
+
+        fn is_consistent_inner<H: HandleImplicationUndetermined, P: Predicate>(
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
-            known_variables: &HashSet<P::Item>,
-            existential: bool,
+            known_variables: &HashSet<P::Item>
         ) -> Option<()> {
             while let Some(rule) = rules.pop() {
                 match rule {
@@ -49,9 +69,7 @@ impl<P: Predicate> Solver<P> {
                     },
                     Rule::And(box [a, b]) => {
                         rules.push(a);
-                        is_consistent_inner(rules, axioms, known_variables, existential)?;
                         rules.push(b);
-                        is_consistent_inner(rules, axioms, known_variables, existential)?;
                     },
                     Rule::Implication(box [a, b]) => {
                         if let Some(true) = a.eval(&axioms) {
@@ -59,27 +77,38 @@ impl<P: Predicate> Solver<P> {
                                 // if guaranteed false, then return false
                                 Some(false) => return None,
 
-                                // if undetermined    , then return false if existential
-                                None if existential => return None,
-
                                 // if guaranteed true , then return true
-                                | Some(true)
+                                Some(true) => (),
+
+                                // if undetermined    , then return false if existential
                                 // if undetermined    , then return true if !existential
-                                | None => (),
+                                None => H::handle()?,
                             }
                         }
                     },
                     Rule::Quantifier(Quant::ForAll, t, box rule) => {
-                        known_variables.iter().fold(Some(()), |is_true, var| {
+                        for var in known_variables {
                             rules.push(rule.apply(t, var));
-                            is_true.and_then(|()| is_consistent_inner(rules, axioms, known_variables, existential))
-                        })?
+                            // This needs to be tested.
+                            // The trade off of this line is
+                            // will the number of variables or
+                            // the number of forall quantifiers
+                            // dominate performance?
+                            is_consistent_inner::<H, _>(rules, axioms, known_variables)?;
+                        }
                     },
                     Rule::Quantifier(Quant::Exists, t, box rule) => {
-                        known_variables.iter().fold(None, |is_true, var| {
+                        let mut iter = known_variables.iter();
+
+                        loop {
+                            let var = iter.next()?;
+
                             rules.push(rule.apply(t, var));
-                            is_true.or_else(|| is_consistent_inner(rules, axioms, known_variables, true))
-                        })?
+
+                            if is_consistent_inner::<Existential, _>(rules, axioms, known_variables).is_some() {
+                                break
+                            }
+                        }
                     }
                 }
             }
@@ -112,7 +141,7 @@ impl<P: Predicate> Solver<P> {
             _ => ()
         }
 
-        is_consistent_inner(&mut rules, &mut Default::default(), &known_variables, false).is_some()
+        is_consistent_inner::<NotExistential, _>(&mut rules, &mut Default::default(), &known_variables).is_some()
     }
 }
 
