@@ -576,3 +576,30 @@ fn consistent_muti_forall_implication_2() {
 
     assert!(solver.is_consistent().is_some())
 }
+
+#[test]
+fn not_consistent_multi_forall() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        cons tc!(u32: Copy);
+
+        not(cons tc!(Vec u32: Clone));
+
+        forall t {
+            if (cons tc!(@t: Clone)) {
+                cons tc!(Vec @t: Clone)
+            }
+        }
+
+        forall t {
+            if (cons tc!(@t: Copy)) {
+                cons tc!(@t: Clone)
+            }
+        }
+    }
+
+    assert!(!solver.is_consistent().is_some());
+}

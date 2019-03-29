@@ -157,14 +157,21 @@ fn main() {
     add_rules! {
         in solver;
 
-        exists t {
-            if ( cons tc!(@t: Copy) ) {
-                cons tc!(@t: Clone)
+        cons tc!(u32: Copy);
+
+        not(cons tc!(Vec u32: Clone));
+
+        forall t {
+            if (cons tc!(@t: Clone)) {
+                cons tc!(Vec @t: Clone)
             }
         }
 
-        cons tc!(u32: Copy);
-        cons tc!(u32: Clone);
+        forall t {
+            if (cons tc!(@t: Copy)) {
+                cons tc!(@t: Clone)
+            }
+        }
     }
 
     println!("{}", solver.is_consistent().is_some());

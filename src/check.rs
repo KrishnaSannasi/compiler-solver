@@ -86,9 +86,9 @@ impl<P: Predicate> Solver<P> {
                             }
                         }
                     }
-                    Rule::Quantifier(Quant::ForAll, t, box rule) => {
+                    Rule::Quantifier(Quant::ForAll, inf_var, rule) => {
                         for var in known_variables {
-                            rules.push(rule.apply(t, var));
+                            rules.push(rule.apply(inf_var, var));
 
                             // This needs to be tested.
                             // The trade off of this line is
@@ -98,13 +98,13 @@ impl<P: Predicate> Solver<P> {
                             is_consistent_inner::<H, _>(rules, axioms, known_variables)?;
                         }
                     }
-                    Rule::Quantifier(Quant::Exists, t, box rule) => {
+                    Rule::Quantifier(Quant::Exists, inf_var, rule) => {
                         let mut iter = known_variables.iter();
 
                         loop {
                             let var = iter.next()?;
 
-                            rules.push(rule.apply(t, var));
+                            rules.push(rule.apply(inf_var, var));
 
                             let is_inner_consistent = is_consistent_inner::<Existential, _>(
                                 rules,
@@ -127,8 +127,6 @@ impl<P: Predicate> Solver<P> {
 
         new_rule.call_with(|x| rules.push(x));
 
-        let known_variables = rules.iter().flat_map(Rule::items).collect::<HashSet<_>>();
-
         rules.sort_by_key(|x| match x {
             Rule::Axiom(..) => 3,
             Rule::And(_) => 2,
@@ -146,6 +144,8 @@ impl<P: Predicate> Solver<P> {
             }
             _ => (),
         }
+
+        let known_variables = rules.iter().flat_map(Rule::items).collect::<HashSet<_>>();
 
         is_consistent_inner::<NotExistential, _>(
             &mut rules,
