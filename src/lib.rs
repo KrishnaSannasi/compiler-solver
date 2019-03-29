@@ -6,7 +6,7 @@ use std::hash::Hash;
 pub mod builder;
 pub use self::builder::*;
 
-mod check;
+pub mod check;
 
 use std::fmt::Debug;
 

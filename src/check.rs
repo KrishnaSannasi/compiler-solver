@@ -1,37 +1,78 @@
 use super::{InfVar, Predicate, Quant, Rule, Solver};
 
+use std::cell::Cell;
+use std::sync::RwLock;
+
 use std::collections::HashSet;
 
-trait COpt<T>: Sized {
-    fn call_with<F: FnOnce(T)>(self, _: F) {}
+type Iter<'a, T> = std::iter::Cloned<std::collections::hash_set::Iter<'a, T>>;
+
+trait COpt<'a, T, P>: Sized {
+    fn call_with<F: FnOnce(T, Iter<'a, P>)>(self, _: F)
+        where P: 'a {}
 }
 
-struct CSome<T>(T);
+struct CSome<'a, T, P>(T, &'a HashSet<P>);
 struct CNone;
 
-impl<T> COpt<T> for CSome<T> {
-    fn call_with<F: FnOnce(T)>(self, f: F) {
-        f(self.0)
+impl<'a, T, P: Clone> COpt<'a, T, P> for CSome<'a, T, P> {
+    fn call_with<F: FnOnce(T, Iter<'a, P>)>(self, f: F) {
+        f(self.0, self.1.iter().cloned())
     }
 }
-impl<T> COpt<T> for CNone {}
+impl<T, P> COpt<'_, T, P> for CNone {}
 
-pub struct Token<'a>(&'a ());
+pub struct Token<'a, P: Predicate>(&'a Solver<P>, Cell<HashSet<P>>);
+pub struct SyncToken<'a, P: Predicate>(&'a Solver<P>, RwLock<HashSet<P>>);
 
-impl<P: Predicate> Solver<P> {
-    pub fn is_consistent(&self) -> Option<Token<'_>> {
-        if self.is_consistent_raw(CNone) {
-            Some(Token(&()))
-        } else {
-            None
+impl<'a, P: Predicate> From<Token<'a, P>> for SyncToken<'a, P> {
+    fn from(Token(solver, axioms): Token<'a, P>) -> Self {
+        Self(solver, RwLock::new(axioms.into_inner()))
+    }
+}
+
+impl<P: Predicate> Token<'_, P> {
+    pub fn is_consistent_with_rule(&self, rule: Rule<P>) -> bool {
+        let mut axioms = self.1.take();
+
+        match self.0.is_consistent_raw(CSome(rule, &axioms)) {
+            Some(new_axioms) => {
+                axioms.extend(new_axioms);
+                self.1.set(axioms);
+                true
+            },
+            None => false
         }
     }
+}
 
-    pub fn is_consistent_with_rule(&self, rule: Rule<P>, _: &Token<'_>) -> bool {
-        self.is_consistent_raw(CSome(rule))
+impl<P: Predicate> SyncToken<'_, P> {
+    pub fn is_consistent_with_rule(&self, rule: Rule<P>) -> bool {
+        let maybe_axioms = {
+            let axioms = self.1.read().unwrap();
+
+            self.0.is_consistent_raw(CSome(rule, &axioms))
+        };
+
+        match (maybe_axioms, self.1.try_write()) {
+            (Some(new_axioms), Ok(mut axioms)) => {
+                axioms.extend(new_axioms);
+                true
+            },
+            (Some(_), _) => true,
+            _ => false
+        }
+    }
+}
+
+impl<P: Predicate> Solver<P> {
+    pub fn is_consistent(&self) -> Option<Token<'_, P>> {
+        let axioms = self.is_consistent_raw(CNone)?;
+        
+        Some(Token(self, Cell::new(axioms)))
     }
 
-    fn is_consistent_raw<O: COpt<Rule<P>>>(&self, new_rule: O) -> bool {
+    fn is_consistent_raw<'a, O: COpt<'a, Rule<P>, P>>(&self, new_rule: O) -> Option<HashSet<P>> where P: 'a {
         struct Existential;
         struct NotExistential;
 
@@ -162,8 +203,12 @@ impl<P: Predicate> Solver<P> {
         }
 
         let mut rules = self.rules.iter().cloned().collect::<Vec<_>>();
+        let mut axioms = HashSet::default();
 
-        new_rule.call_with(|x| rules.push(x));
+        new_rule.call_with(|x, old_axioms| {
+            rules.push(x);
+            axioms.extend(old_axioms);
+        });
 
         rules.sort_unstable_by_key(|x| match x {
             Rule::Axiom(..) => 4,
@@ -238,13 +283,13 @@ impl<P: Predicate> Solver<P> {
 
                 if let Some(forall_pos) = forall_pos {
                     if sort_rules_and_find_cycle(&mut rules[exists_pos..forall_pos]) {
-                        return false;
+                        return None;
                     }
                 }
             },
             (None, Some(forall_pos)) => {
                 if sort_rules_and_find_cycle(&mut rules[..forall_pos]) {
-                    return false;
+                    return None;
                 }
             }
             (None, None) => ()
@@ -258,7 +303,7 @@ impl<P: Predicate> Solver<P> {
             Some(Rule::Implication(..)) | Some(Rule::Quantifier(..)) => {
                 for i in rules.iter() {
                     if let Rule::Quantifier(Quant::Exists, ..) = i {
-                        return false;
+                        return None;
                     }
                 }
             }
@@ -269,10 +314,11 @@ impl<P: Predicate> Solver<P> {
 
         is_consistent_inner::<NotExistential, _>(
             &mut rules,
-            &mut Default::default(),
+            &mut axioms,
             &known_variables,
-        )
-        .is_some()
+        )?;
+
+        Some(axioms)
     }
 }
 
