@@ -37,7 +37,7 @@ impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for Token<'a, P> {
 impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for SyncToken<'a, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.1.try_read() {
-            Ok(axioms) => write!(f, "SyncToken({:?})", axioms),
+            Ok(axioms) => write!(f, "SyncToken({:?})", *axioms),
             Err(..) => write!(f, "<SyncToken read failed>")
         }
     }
@@ -201,7 +201,7 @@ impl<P: Predicate> Solver<P> {
 
                             rule_buffer.clear();
                             rule_buffer.push(rule);
-                            
+
                             dbg!(is_consistent_inner::<H, _>(&mut rule_buffer, axioms, known_variables))?;
                         }
                     }

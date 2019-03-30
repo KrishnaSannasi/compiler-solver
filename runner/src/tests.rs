@@ -672,7 +672,7 @@ fn not_consistent_for_all_exists() {
 }
 
 #[test]
-fn consistent_for_all_exists() {
+fn consistent_for_all_exists_1() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
@@ -695,6 +695,35 @@ fn consistent_for_all_exists() {
         exists t {
             cons tc!(Vec @t: Clone)
         }
+    }
+
+    assert!(solver.is_consistent().is_some());
+}
+
+#[test]
+fn consistent_for_all_exists_2() {
+    let mut solver = Solver::<tc>::new();
+
+    add_rules! {
+        in solver;
+
+        cons tc!(u32: Foo);
+
+        forall t {
+            if (cons tc!(@t: Clone)) {
+                cons tc!(Vec @t: Clone)
+            }
+        }
+
+        forall t {
+            if (cons tc!(@t: Copy)) {
+                cons tc!(@t: Clone)
+            }
+        }
+
+        not(exists t {
+            cons tc!(Vec @t: Clone)
+        });
     }
 
     assert!(solver.is_consistent().is_some());
