@@ -248,8 +248,10 @@ impl<P: Predicate> Solver<P> {
                             let var = match iter.next() {
                                 Some(var) => var,
                                 None => if existential_assignments.contains_key(&inf_var) {
+                                    dbg!("break");
                                     break
                                 } else {
+                                    dbg!("return");
                                     return None
                                 }
                             };
@@ -271,7 +273,7 @@ impl<P: Predicate> Solver<P> {
                                     .and_modify(|x| x.push(var.clone()))
                                     .or_insert_with(|| vec![var.clone()]);
                                 
-                                dbg!(var);
+                                dbg!("store");
                             }
                         }
                     }

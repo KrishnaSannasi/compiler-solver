@@ -371,12 +371,28 @@ fn not_consistent_for_all_multiple_implications() {
 }
 
 #[test]
-fn consistent_exists_implication_1() {
+fn consistent_exists_implication() {
     let mut solver = Solver::<tc>::new();
 
     add_rules! {
         in solver;
 
+        /*
+         * Note, this doesn't do what you would expect,
+         * because implications are true if the input proposition
+         * is true,
+         * 
+         * ```
+         * if ( cons tc!(@t: Copy) ) {
+         *     cons tc!(@t: Clone)
+         * }
+         * ```
+         * 
+         * is true if `cons tc!(@t: Copy)` is false, and this is false when
+         * `@t \in { Copy, Clone }`
+         * 
+         * So this test case will pass
+         */
         exists t {
             if ( cons tc!(@t: Copy) ) {
                 cons tc!(@t: Clone)
@@ -384,136 +400,6 @@ fn consistent_exists_implication_1() {
         }
 
         cons tc!(u32: Copy);
-        cons tc!(u32: Clone);
-    }
-
-    assert!(solver.is_consistent().is_some());
-}
-
-#[test]
-fn consistent_exists_implication_2() {
-    let mut solver = Solver::<tc>::new();
-
-    add_rules! {
-        in solver;
-
-        exists t {
-            if ( cons tc!(@t: Copy) ) {
-                cons tc!(@t: Clone)
-            }
-        }
-
-        // cons tc!(u32: Copy);
-        cons tc!(u32: Clone);
-    }
-
-    assert!(solver.is_consistent().is_some())
-}
-
-#[test]
-fn consistent_exists_implication_3() {
-    for _ in 0..1_000 {
-        let mut solver = Solver::<tc>::new();
-
-        add_rules! {
-            in solver;
-
-            exists t {
-                if ( cons tc!(@t: Clone) ) {
-                    cons tc!(Vec @t: Clone)
-                }
-            }
-
-            cons tc!(u32: Copy);
-            cons tc!(Vec u32: Clone);
-        }
-
-        assert!(solver.is_consistent().is_some());
-    }
-}
-
-#[test]
-fn not_consistent_exists_implication_2() {
-    let mut solver = Solver::<tc>::new();
-
-    add_rules! {
-        in solver;
-
-        exists t {
-            if ( cons tc!(@t: Copy) ) {
-                cons tc!(@t: Clone)
-            }
-        }
-
-        cons tc!(u32: Copy);
-        
-        // not(cons tc!(u32: Clone));
-        // cons tc!(u32: Clone);
-    }
-
-    assert!(!solver.is_consistent().is_some())
-}
-
-#[test]
-fn not_consistent_multi_exists_implication() {
-    let mut solver = Solver::<tc>::new();
-
-    add_rules! {
-        in solver;
-
-        exists t {
-            exists u {
-                if (cons tc!(@t: Clone)) {
-                    cons tc!(Vec @u: Clone)
-                }
-            }
-        }
-
-        cons tc!(u32: Clone);
-        // cons tc!(Vec u32: Clone);
-    }
-
-    assert!(!solver.is_consistent().is_some())
-}
-
-#[test]
-fn consistent_multi_exists_implication_1() {
-    let mut solver = Solver::<tc>::new();
-
-    add_rules! {
-        in solver;
-
-        exists t {
-            exists u {
-                if (cons tc!(@t: Copy)) {
-                    cons tc!(Vec @u: Clone)
-                }
-            }
-        }
-
-        cons tc!(u32: Copy);
-        cons tc!(Vec u32: Clone);
-    }
-
-    assert!(solver.is_consistent().is_some())
-}
-
-#[test]
-fn consistent_multi_exists_implication_2() {
-    let mut solver = Solver::<tc>::new();
-
-    add_rules! {
-        in solver;
-
-        exists t {
-            exists u {
-                if (cons tc!(@t: Clone)) {
-                    cons tc!(Vec @u: Clone)
-                }
-            }
-        }
-
-        cons tc!(Vec u32: Clone);
     }
 
     assert!(solver.is_consistent().is_some())
@@ -527,8 +413,8 @@ fn consistent_forall_exists_implication_1() {
         in solver;
 
         forall t {
-            exists u {
-                if (cons tc!(@t: Foo)) {
+            if (cons tc!(@t: Foo)) {
+                exists u {
                     cons tc!(Array @t @u: Foo)
                 }
             }
