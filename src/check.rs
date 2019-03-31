@@ -3,7 +3,7 @@ use super::{InfVar, Predicate, Quant, Rule, Solver};
 use std::cell::Cell;
 use std::sync::RwLock;
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 
 type Iter<'a, T> = std::iter::Cloned<std::collections::hash_set::Iter<'a, T>>;
 
@@ -22,46 +22,66 @@ impl<'a, T, P: Clone> COpt<'a, T, P> for CSome<'a, T, P> {
 }
 impl<T, P> COpt<'_, T, P> for CNone {}
 
-pub struct Token<'a, P: Predicate>(&'a Solver<P>, Cell<HashSet<P>>);
-pub struct SyncToken<'a, P: Predicate>(&'a Solver<P>, RwLock<HashSet<P>>);
+pub struct Token<'a, P: Predicate>(&'a Solver<P>, Cell<HashSet<P>>, Cell<HashMap<InfVar, Vec<P::Item>>>);
+pub struct SyncToken<'a, P: Predicate>(&'a Solver<P>, RwLock<HashSet<P>>, RwLock<HashMap<InfVar, Vec<P::Item>>>);
 
 impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for Token<'a, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let axioms = self.1.take();
-        write!(f, "Token({:?})", axioms)?;
+        let existential_assignments = self.2.take();
+
+        f.debug_struct("Token")
+            .field("axioms", &axioms)
+            .field("existential_assignments", &existential_assignments)
+            .finish()?;
+
         self.1.set(axioms);
+        self.2.set(existential_assignments);
+
         Ok(())
     }
 }
 
 impl<'a, P: Predicate + std::fmt::Debug> std::fmt::Debug for SyncToken<'a, P> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.1.try_read() {
-            Ok(axioms) => write!(f, "SyncToken({:?})", *axioms),
-            Err(..) => write!(f, "<SyncToken read failed>")
+        match (self.1.try_read(), self.2.try_read()) {
+            (Ok(axioms), Ok(existential_assignments)) => 
+                f.debug_struct("SyncToken")
+                    .field("axioms", &*axioms)
+                    .field("existential_assignments", &*existential_assignments)
+                    .finish(),
+            _ => write!(f, "<SyncToken read failed>")
         }
     }
 }
 
 impl<'a, P: Predicate> From<Token<'a, P>> for SyncToken<'a, P> {
-    fn from(Token(solver, axioms): Token<'a, P>) -> Self {
-        Self(solver, RwLock::new(axioms.into_inner()))
+    fn from(Token(solver, axioms, existential_assignments): Token<'a, P>) -> Self {
+        Self(
+            solver,
+            RwLock::new(axioms.into_inner()),
+            RwLock::new(existential_assignments.into_inner())
+        )
     }
 }
 
 impl<P: Predicate> Token<'_, P> {
     pub fn is_consistent_with_rule(&self, rule: Rule<P>) -> bool {
         let mut axioms = self.1.take();
+        let mut existential_assignments = self.2.take();
 
         let ret = match self.0.is_consistent_raw(CSome(rule, &axioms)) {
-            Some(new_axioms) => {
+            Some((new_axioms, new_existential_assignments)) => {
                 axioms.extend(new_axioms);
+                existential_assignments.extend(new_existential_assignments);
+
                 true
             },
             None => false
         };
         
         self.1.set(axioms);
+        self.2.set(existential_assignments);
         
         ret
     }
@@ -75,25 +95,30 @@ impl<P: Predicate> SyncToken<'_, P> {
             self.0.is_consistent_raw(CSome(rule, &axioms))
         };
 
-        match (maybe_axioms, self.1.try_write()) {
-            (Some(new_axioms), Ok(mut axioms)) => {
+        if let Some((new_axioms, new_existential_assignments)) = maybe_axioms {
+            if let Ok(mut axioms) = self.1.try_write() {
                 axioms.extend(new_axioms);
-                true
-            },
-            (Some(_), _) => true,
-            _ => false
+            }
+
+            if let Ok(mut existential_assignments) = self.2.try_write() {
+                existential_assignments.extend(new_existential_assignments);
+            }
+
+            true
+        } else {
+            false
         }
     }
 }
 
 impl<P: Predicate> Solver<P> {
     pub fn is_consistent(&self) -> Option<Token<'_, P>> {
-        let axioms = self.is_consistent_raw(CNone)?;
+        let (axioms, existential_assignments) = self.is_consistent_raw(CNone)?;
         
-        Some(Token(self, Cell::new(axioms)))
+        Some(Token(self, Cell::new(axioms), Cell::new(existential_assignments)))
     }
 
-    fn is_consistent_raw<'a, O: COpt<'a, Rule<P>, P>>(&self, new_rule: O) -> Option<HashSet<P>> where P: 'a {
+    fn is_consistent_raw<'a, O: COpt<'a, Rule<P>, P>>(&self, new_rule: O) -> Option<(HashSet<P>, HashMap<InfVar, Vec<P::Item>>)> where P: 'a {
         struct Existential;
         struct NotExistential;
 
@@ -119,6 +144,7 @@ impl<P: Predicate> Solver<P> {
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
             known_variables: &HashSet<P::Item>,
+            existential_assignments: &mut HashMap<InfVar, Vec<P::Item>>
         ) -> Option<()> {
             struct OnDrop;
             impl Drop for OnDrop {
@@ -193,27 +219,42 @@ impl<P: Predicate> Solver<P> {
                     }
                     Rule::Quantifier(Quant::ForAll, inf_var, rule) => {
                         dbg!("forall");
+                        dbg!(inf_var);
 
                         let mut rule_buffer = Vec::with_capacity(1);
 
                         for var in known_variables {
-                            let rule = rule.apply(inf_var, var);
+                            let rule = dbg!(rule.apply(inf_var, dbg!(var)));
 
                             rule_buffer.clear();
                             rule_buffer.push(rule);
 
-                            dbg!(is_consistent_inner::<H, _>(&mut rule_buffer, axioms, known_variables))?;
+                            dbg!(is_consistent_inner::<H, _>(
+                                &mut rule_buffer,
+                                axioms,
+                                known_variables,
+                                existential_assignments
+                            ))?;
                         }
                     }
                     Rule::Quantifier(Quant::Exists, inf_var, rule) => {
                         dbg!("exists");
+                        dbg!(inf_var);
+
                         let mut iter = known_variables.iter();
                         let mut rule_buffer = Vec::with_capacity(1);
 
                         loop {
-                            let var = iter.next()?;
+                            let var = match iter.next() {
+                                Some(var) => var,
+                                None => if existential_assignments.contains_key(&inf_var) {
+                                    break
+                                } else {
+                                    return None
+                                }
+                            };
 
-                            let rule = rule.apply(inf_var, var);
+                            let rule = dbg!(rule.apply(inf_var, dbg!(var)));
 
                             rule_buffer.clear();
                             rule_buffer.push(rule);
@@ -222,10 +263,15 @@ impl<P: Predicate> Solver<P> {
                                 &mut rule_buffer,
                                 axioms,
                                 known_variables,
+                                existential_assignments
                             );
 
                             if is_inner_consistent.is_some() {
-                                break;
+                                existential_assignments.entry(inf_var)
+                                    .and_modify(|x| x.push(var.clone()))
+                                    .or_insert_with(|| vec![var.clone()]);
+                                
+                                dbg!(var);
                             }
                         }
                     }
@@ -344,14 +390,16 @@ impl<P: Predicate> Solver<P> {
         }
 
         let known_variables = rules.iter().flat_map(Rule::items).collect();
+        let mut existential_assignments = HashMap::default();
 
         is_consistent_inner::<NotExistential, _>(
             &mut rules,
             &mut axioms,
             &known_variables,
+            &mut existential_assignments,
         )?;
 
-        Some(dbg!(axioms))
+        Some(dbg!((axioms, existential_assignments)))
     }
 }
 
