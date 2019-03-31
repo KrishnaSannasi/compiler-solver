@@ -516,12 +516,6 @@ fn consistent_multi_forall() {
                     cons tc!(@t: Clone)
                 }
             }
-
-            exists t {
-                if (cons tc!(@t: Clone)) {
-                    cons tc!(@t: Copy)
-                }
-            }
         }
 
         assert!(solver.is_consistent().is_some());
