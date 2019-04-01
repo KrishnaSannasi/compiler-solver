@@ -99,9 +99,9 @@ where
 
 #[macro_export]
 macro_rules! rule {
-    (cons $pred:expr)
-        => { $crate::builder::Constraint($pred) };
-    (not ($($rule:tt)*))
+    ( cons $pred:expr )
+        => { $crate::builder::Axiom($pred) };
+    ( not ($($rule:tt)*) )
         => { $crate::builder::Not(rule!($($rule)*)) };
     (if ($($a:tt)*) { $($b:tt)* })
         => { $crate::builder::Implication(rule!($($a)*), rule!($($b)*)) };
@@ -135,6 +135,30 @@ macro_rules! rule {
         $( ($($term:tt)*) )+
     ) => {
         rule!(@internal $conj rule!($($first)*), rule!($conj $(($($term)*))+))
+    };
+    
+    (@internal find $( ( $($parts:tt)* ) )* []) => {
+        rule!( and $(($($parts)*))* )
+    };
+    
+    (@internal find $( ( $($parts:tt)* ) )* [$($stack:tt)*] ; $($rest:tt)*) => {
+        rule!( @internal find $(($($parts)*))* ($($stack)*) [] $($rest)* )
+    };
+    
+    (@internal find $( ( $($parts:tt)* ) )* [$($stack:tt)*] { $($block:tt)* } $($rest:tt)*) => {
+        rule!( @internal find $(($($parts)*))* ($($stack)* { $($block)* }) [] $($rest)* )
+    };
+    
+    (@internal find $( ( $($parts:tt)* ) )* [$($stack:tt)*] $t:tt $($rest:tt)*) => {
+        rule!( @internal find $(($($parts)*))* [$($stack)* $t] $($rest)* )
+    };
+    
+    (@internal find $( ( $($parts:tt)* ) )* [$($stack:tt)*] $($rest:tt)*) => {
+        compile_error!(stringify!(unknown state [$($stack)*] $($rest)*))
+    };
+    
+    ($($t:tt)*) => {
+        rule!(@internal find [] $($t)*)
     };
 }
 

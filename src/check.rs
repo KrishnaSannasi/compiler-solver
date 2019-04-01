@@ -179,32 +179,32 @@ impl<P: Predicate> Solver<P> {
                     Rule::Implication(box [a, b]) => {
                         dbg!("implication");
                         
-                        if let Some(true) = a.eval(&axioms) {
-                            fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, add_axiom: Rule<P>) {
+                        if let Some(true) = a.eval(&axioms, known_variables) {
+                            fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, known_variables: &HashSet<P::Item>, add_axiom: Rule<P>) {
                                 match dbg!(add_axiom) {
                                     Rule::Axiom(x) => {
                                         axioms.insert(x);
                                     },
                                     Rule::And(box [a, b]) => {
-                                        add_to_axioms(axioms, a);
-                                        add_to_axioms(axioms, b);
+                                        add_to_axioms(axioms, known_variables, a);
+                                        add_to_axioms(axioms, known_variables, b);
                                     },
                                     Rule::Implication(box [a, b]) => {
-                                        if let Some(true) = a.eval(&axioms) {
-                                            add_to_axioms(axioms, b)
+                                        if let Some(true) = a.eval(&axioms, known_variables) {
+                                            add_to_axioms(axioms, known_variables, b)
                                         }
                                     },
-                                    Rule::Quantifier(..) => unimplemented!()
+                                    Rule::Quantifier(..) => ()
                                 }
                             }
 
-                            match dbg!(b.eval(&axioms)) {
+                            match dbg!(b.eval(&axioms, known_variables)) {
                                 // if guaranteed false, then return false
                                 Some(false) => return None,
 
                                 // if guaranteed true , then return true
                                 Some(true) => if H::handle().is_some() {
-                                    add_to_axioms(axioms, b)
+                                    add_to_axioms(axioms, known_variables, b)
                                 },
 
                                 // if undetermined    , then return false if existential
@@ -212,7 +212,7 @@ impl<P: Predicate> Solver<P> {
                                 None => {
                                     H::handle()?;
 
-                                    add_to_axioms(axioms, b);
+                                    add_to_axioms(axioms, known_variables, b);
                                 },
                             }
                         }
@@ -419,7 +419,7 @@ impl<P: Predicate> Rule<P> {
         }
     }
 
-    fn eval(&self, axioms: &HashSet<P>) -> Option<bool> {
+    fn eval(&self, axioms: &HashSet<P>, known_variables: &HashSet<P::Item>) -> Option<bool> {
         match self {
             &Rule::Axiom(ref x) => {
                 if axioms.contains(x) {
@@ -430,8 +430,17 @@ impl<P: Predicate> Rule<P> {
                     None
                 }
             }
-            Rule::Implication(box [a, b]) => Some(!a.eval(axioms)? || b.eval(axioms)?),
-            Rule::And(box [a, b]) => Some(a.eval(axioms)? && b.eval(axioms)?),
+            Rule::Implication(box [a, b]) => Some(!a.eval(axioms, known_variables)? || b.eval(axioms, known_variables)?),
+            Rule::And(box [a, b]) => Some(a.eval(axioms, known_variables)? && b.eval(axioms, known_variables)?),
+            &Rule::Quantifier(Quant::Exists, t, ref rule) => {
+                for i in known_variables {
+                    if let Some(true) = rule.apply(t, i).eval(axioms, known_variables) {
+                        return Some(true)
+                    }
+                }
+                
+                Some(false)
+            },
             Rule::Quantifier(..) => unimplemented!(),
         }
     }

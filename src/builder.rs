@@ -3,7 +3,7 @@ use super::{InfVar, Predicate, Quant, Rule};
 pub struct ForAll;
 pub struct Exists;
 
-pub struct Constraint<P: Predicate>(pub P);
+pub struct Axiom<P: Predicate>(pub P);
 pub struct Quantifier<Q, R: RuleBuilder>(pub Q, pub Binder<R>);
 
 pub struct Implication<A: RuleBuilder, B: RuleBuilder>(pub A, pub B);
@@ -53,7 +53,7 @@ impl<R: RuleBuilder> RuleBuilder for Not<R> {
     type Predicate = R::Predicate;
 }
 
-impl<P: Predicate> RuleBuilder for Constraint<P> {
+impl<P: Predicate> RuleBuilder for Axiom<P> {
     type Predicate = P;
 }
 
@@ -85,15 +85,15 @@ impl<R: RuleBuilder + Into<RuleOf<R>>> From<Not<Not<R>>> for RuleOf<R> {
 }
 
 // Not(Cons($T, $C, $V)) (rule)
-impl<P: Predicate> From<Not<Constraint<P>>> for Rule<P> {
-    fn from(Not(Constraint(p)): Not<Constraint<P>>) -> Self {
+impl<P: Predicate> From<Not<Axiom<P>>> for Rule<P> {
+    fn from(Not(Axiom(p)): Not<Axiom<P>>) -> Self {
         Rule::Axiom(p.not())
     }
 }
 
 // Cons($T, $C, $V) (rule)
-impl<P: Predicate> From<Constraint<P>> for Rule<P> {
-    fn from(Constraint(p): Constraint<P>) -> Self {
+impl<P: Predicate> From<Axiom<P>> for Rule<P> {
+    fn from(Axiom(p): Axiom<P>) -> Self {
         Rule::Axiom(p)
     }
 }
