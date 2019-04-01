@@ -76,6 +76,9 @@ macro_rules! Type {
     ($name:ident) => {
         Type::Concrete(stringify!($name))
     };
+    ($name:literal) => {
+        Type::Concrete(stringify!($name))
+    };
     (@$name:ident) => {
         Type::Infer($name)
     };
@@ -91,6 +94,10 @@ macro_rules! Type {
     }};
     (#vec $vec:ident) => {};
     (#vec $vec:ident $a:ident $($rest:tt)*) => {
+        $vec.push( Type![ $a ] );
+        Type! { #vec $vec $($rest)* }
+    };
+    (#vec $vec:ident $a:literal $($rest:tt)*) => {
         $vec.push( Type![ $a ] );
         Type! { #vec $vec $($rest)* }
     };
@@ -111,6 +118,9 @@ macro_rules! tc {
     (@first [$($stack:tt)*] @$first:ident $($rest:tt)*) => {
         tc! { @first [$($stack)* @$first ] $($rest)* }
     };
+    (@first [$($stack:tt)*] @$first:literal $($rest:tt)*) => {
+        tc! { @first [$($stack)* @$first ] $($rest)* }
+    };
     (@first [$($stack:tt)*] ($($inner:tt)*) $($rest:tt)*) => {
         tc! { @first [$($stack)* ($($inner)*) ] $($rest)* }
     };
@@ -118,6 +128,9 @@ macro_rules! tc {
         tc! { @second [$($stack)*] [] $($rest)* }
     };
     (@second [$($f_stack:tt)*] [$($stack:tt)*] $first:ident $($rest:tt)*) => {
+        tc! { @second [$($f_stack)*] [$($stack)* $first] $($rest)* }
+    };
+    (@second [$($f_stack:tt)*] [$($stack:tt)*] $first:literal $($rest:tt)*) => {
         tc! { @second [$($f_stack)*] [$($stack)* $first] $($rest)* }
     };
     (@second [$($f_stack:tt)*] [$($stack:tt)*] @$first:ident $($rest:tt)*) => {
@@ -138,10 +151,12 @@ mod tests;
 
 impl Predicate for tc {
     type Item = Type;
-    type Iter = Box<dyn Iterator<Item = Type>>;
+    type Iter = std::iter::Chain<Box<dyn Iterator<Item = Type>>, Box<dyn Iterator<Item = Type>>>;
 
     fn items(&self) -> Self::Iter {
-        self.0.get_concrete()
+        self.0.get_concrete().chain(
+            self.1.get_concrete()
+        )
     }
 
     fn apply(&self, i: InfVar, r: &Self::Item) -> Self {
@@ -179,28 +194,29 @@ impl Type {
 
 fn main() {
     let mut solver = Solver::<tc>::new();
-
+    
     add_rules! {
         in solver;
 
-        cons tc!(u32: Foo);
+        cons tc!(u32: Type);
+        cons tc!(bool: Type);
+
+        cons tc!(Copy: Trait);
+
+        cons tc!(u32: Copy);
+        cons tc!(bool: Copy);
 
         forall t {
-            if (cons tc!(@t: Clone)) {
-                cons tc!(Vec @t: Clone)
+            if (cons tc!(@t: Type)) {
+                exists c {
+                    cons tc!(@c: Trait);
+                    cons tc!(@t: @c);
+                }
             }
-        }
-
-        forall t {
-            if (cons tc!(@t: Copy)) {
-                cons tc!(@t: Clone)
-            }
-        }
-        
-        exists t {
-            cons tc!(Vec @t: Clone)
         }
     }
-
-    println!("{:?}", solver.is_consistent());
+    
+    let token = solver.is_consistent();
+    println!("{:#?}", solver);
+    println!("{:#?}", token);
 }
