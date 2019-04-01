@@ -608,3 +608,60 @@ fn consistent_for_all_exists_2() {
 
     assert!(solver.is_consistent().is_some());
 }
+
+#[test]
+fn consistent_for_all_implication_exists() {
+    
+    let mut solver = Solver::<tc>::new();
+    
+    add_rules! {
+        in solver;
+
+        cons tc!(u32: Type);
+        cons tc!(bool: Type);
+
+        cons tc!(Copy: Trait);
+
+        cons tc!(u32: Copy);
+        cons tc!(bool: Copy);
+
+        forall t {
+            if (cons tc!(@t: Type)) {
+                exists c {
+                    cons tc!(@c: Trait);
+                    cons tc!(@t: @c);
+                }
+            }
+        }
+    }
+    
+    assert!(solver.is_consistent().is_some());
+}
+
+#[test]
+fn not_consistent_for_all_implication_exists() {
+    let mut solver = Solver::<tc>::new();
+    
+    add_rules! {
+        in solver;
+
+        cons tc!(u32: Type 0);
+        cons tc!(bool: Type 0);
+
+        cons tc!(Copy: Trait);
+
+        cons tc!(u32: Copy);
+        // cons tc!(bool: Copy);
+
+        forall t {
+            if (cons tc!(@t: Type 0)) {
+                exists c {
+                    cons tc!(@c: Trait);
+                    cons tc!(@t: @c);
+                }
+            }
+        }
+    }
+    
+    assert!(!solver.is_consistent().is_some());
+}
