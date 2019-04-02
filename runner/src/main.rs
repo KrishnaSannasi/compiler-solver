@@ -198,8 +198,10 @@ fn main() {
     add_rules! {
         in solver;
 
-        cons tc!(u32: Type);
-        cons tc!(bool: Type);
+        cons tc!(u32: Type 0);
+        cons tc!(bool: Type 0);
+
+        // cons tc!(Vec: Fn (Type 0) (Type 0));
 
         cons tc!(Copy: Trait);
 
@@ -207,7 +209,13 @@ fn main() {
         cons tc!(bool: Copy);
 
         forall t {
-            if (cons tc!(@t: Type)) {
+            if (cons tc!(@t: Type 0)) {
+                cons tc!(Vec @t: Type 0)
+            }
+        }
+
+        forall t {
+            if (cons tc!(@t: Type 0)) {
                 exists c {
                     cons tc!(@c: Trait);
                     cons tc!(@t: @c);

@@ -462,6 +462,8 @@ impl<P: Predicate> Rule<P> {
             true
         } else {
             match dbg!(self) {
+                Rule::And(box [a, b]) => a.contains(rule) || b.contains(rule),
+                Rule::Quantifier(_, _, r) => r.contains(rule),
                 Rule::Axiom(s) => {
                     match dbg!(rule) {
                         Rule::Axiom(r) => s.matches(r),
@@ -470,7 +472,6 @@ impl<P: Predicate> Rule<P> {
                         Rule::Quantifier(_, _, rule) => self.contains(rule)
                     }
                 },
-                Rule::And(box [a, b]) => a.contains(rule) || b.contains(rule),
                 Rule::Implication(box [a, b]) => {
                     match dbg!(rule) {
                         | Rule::And(..)
@@ -479,9 +480,6 @@ impl<P: Predicate> Rule<P> {
                         Rule::Quantifier(_, _, rule) => a.contains(rule) || b.contains(rule),
                     }
                 },
-                Rule::Quantifier(..) => {
-                    unimplemented!()
-                }
             }
         }
     }
