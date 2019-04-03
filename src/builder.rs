@@ -104,7 +104,7 @@ where
     Not<R>: Into<Self>,
 {
     fn from(Not(Quantifier(_, Binder(t, c))): Not<Quantifier<ForAll, R>>) -> Self {
-        Rule::Quantifier(Quant::Exists, t, Box::new(Not(c).into()))
+        Quantifier(Exists, Binder(t, Not(c))).into()
     }
 }
 
@@ -121,7 +121,7 @@ where
     Not<R>: Into<Self>,
 {
     fn from(Not(Quantifier(_, Binder(t, c))): Not<Quantifier<Exists, R>>) -> Self {
-        Rule::Quantifier(Quant::ForAll, t, Box::new(Not(c).into()))
+        Quantifier(ForAll, Binder(t, Not(c))).into()
     }
 }
 
@@ -185,11 +185,6 @@ where
     Implication<Not<A>, B>: Into<Self>,
 {
     fn from(Or(a, b): Or<A, B>) -> Self {
-        // Rule::Or(Box::new([
-        //     r.0.into(),
-        //     r.1.into()
-        // ]))
-
         Implication(Not(a), b).into()
     }
 }

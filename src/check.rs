@@ -5,6 +5,13 @@ use std::sync::RwLock;
 
 use std::collections::{HashSet, HashMap};
 
+struct OnDrop;
+impl Drop for OnDrop {
+    fn drop(&mut self) {
+        println!("}}--", );
+    }
+}
+
 type Iter<'a, T> = std::iter::Cloned<std::collections::hash_set::Iter<'a, T>>;
 
 trait COpt<'a, T, P>: Sized {
@@ -143,16 +150,9 @@ impl<P: Predicate> Solver<P> {
         fn is_consistent_inner<H: HandleImplicationUndetermined, P: Predicate>(
             rules: &mut Vec<Rule<P>>,
             axioms: &mut HashSet<P>,
-            known_variables: &HashSet<P::Item>,
+            known_variables: &mut HashSet<P::Item>,
             existential_assignments: &mut HashMap<InfVar, Vec<P::Item>>
         ) -> Option<()> {
-            struct OnDrop;
-            impl Drop for OnDrop {
-                fn drop(&mut self) {
-                    println!("}}--", );
-                }
-            }
-
             while let Some(rule) = rules.pop() {
                 println!("--{{", );
                 let _on_drop = OnDrop;
@@ -178,43 +178,56 @@ impl<P: Predicate> Solver<P> {
                     }
                     Rule::Implication(box [a, b]) => {
                         dbg!("implication");
-                        
-                        if let Some(true) = a.eval(&axioms, known_variables) {
-                            fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, known_variables: &HashSet<P::Item>, add_axiom: Rule<P>) {
-                                match dbg!(add_axiom) {
-                                    Rule::Axiom(x) => {
-                                        axioms.insert(x);
-                                    },
-                                    Rule::And(box [a, b]) => {
-                                        add_to_axioms(axioms, known_variables, a);
-                                        add_to_axioms(axioms, known_variables, b);
-                                    },
-                                    Rule::Implication(box [a, b]) => {
-                                        if let Some(true) = a.eval(&axioms, known_variables) {
-                                            add_to_axioms(axioms, known_variables, b)
-                                        }
-                                    },
-                                    Rule::Quantifier(..) => ()
-                                }
+
+                        fn add_to_axioms<P: Predicate>(axioms: &mut HashSet<P>, known_variables: &HashSet<P::Item>, add_axiom: Rule<P>, truthy: bool) {
+                            match dbg!(add_axiom) {
+                                Rule::Axiom(x) => if truthy {
+                                    axioms.insert(x);
+                                } else {
+                                    axioms.insert(x.not());
+                                },
+                                Rule::And(box [a, b]) => {
+                                    add_to_axioms(axioms, known_variables, a, truthy);
+                                    add_to_axioms(axioms, known_variables, b, truthy);
+                                },
+                                Rule::Implication(box [a, b]) => {
+                                    if let Some(true) = a.eval(&axioms, known_variables) {
+                                        add_to_axioms(axioms, known_variables, b, truthy)
+                                    }
+                                },
+                                Rule::Quantifier(..) => ()
+                            }
+                        }
+
+                        let a_eval = a.eval(&axioms, known_variables);
+                        let b_eval = b.eval(&axioms, known_variables);
+
+                        match (a_eval, b_eval) {
+                            // if cond guaranteed false, then return doesn't matter
+                            (Some(false), _) => (),
+                            
+                            // if impl guaranteed false, then return false
+                            (Some(true), Some(false)) => return None,
+                            
+                            // if impl guaranteed true , then return true
+                            (Some(true), Some(true)) => if H::handle().is_some() {
+                                add_to_axioms(axioms, known_variables, b, true)
+                            },
+                            
+                            // if impl undetermined, then return false if existential
+                            // if impl undetermined, then return true if !existential
+                            (Some(true), None) => {
+                                H::handle()?;
+
+                                add_to_axioms(axioms, known_variables, b, true);
                             }
 
-                            match dbg!(b.eval(&axioms, known_variables)) {
-                                // if guaranteed false, then return false
-                                Some(false) => return None,
+                            (None, Some(false)) => {
+                                H::handle()?;
 
-                                // if guaranteed true , then return true
-                                Some(true) => if H::handle().is_some() {
-                                    add_to_axioms(axioms, known_variables, b)
-                                },
-
-                                // if undetermined    , then return false if existential
-                                // if undetermined    , then return true if !existential
-                                None => {
-                                    H::handle()?;
-
-                                    add_to_axioms(axioms, known_variables, b);
-                                },
-                            }
+                                add_to_axioms(axioms, known_variables, b, false);
+                            },
+                            (None, _) => (),
                         }
                     }
                     Rule::Quantifier(Quant::ForAll, inf_var, rule) => {
@@ -223,8 +236,9 @@ impl<P: Predicate> Solver<P> {
 
                         let mut rule_buffer = Vec::with_capacity(1);
 
-                        for var in known_variables {
+                        for var in known_variables.clone().iter() {
                             let rule = dbg!(rule.apply(inf_var, dbg!(var)));
+                            known_variables.extend(rule.items());
 
                             rule_buffer.clear();
                             rule_buffer.push(rule);
@@ -241,7 +255,8 @@ impl<P: Predicate> Solver<P> {
                         dbg!("exists");
                         dbg!(inf_var);
 
-                        let mut iter = known_variables.iter();
+                        let kv = known_variables.clone();
+                        let mut iter = kv.iter();
                         let mut rule_buffer = Vec::with_capacity(1);
 
                         loop {
@@ -282,6 +297,70 @@ impl<P: Predicate> Solver<P> {
 
             Some(())
         }
+        
+        type Tree<P> = HashMap<Rule<P>, (HashSet<Rule<P>>, HashSet<usize>)>;
+
+        fn find_cycles<P: Predicate>(rules: &[Rule<P>]) -> Option<Tree<P>> {
+            fn build_deps_tree<P: Predicate>(rules: &[Rule<P>]) -> Tree<P> {
+                let mut tree: Tree<P> = HashMap::default();
+
+                for (i, ri) in rules.iter().enumerate() {
+                    let mut entry = Err(tree.entry(ri.clone()));
+                    for (j, rj) in rules.iter().enumerate() {
+                        if i == j {
+                            continue
+                        }
+                        if ri.is_dep(rj) {
+                            let vec = match entry {
+                                Ok(vec) => vec,
+                                Err(entry) => entry.or_default()
+                            };
+                            
+                            vec.0.insert(rj.clone());
+                            vec.1.insert(j);
+                            entry = Ok(vec);
+                        }
+                    }
+                }
+
+                tree
+            }
+
+            fn util<P: Predicate>(rules: &[Rule<P>], tree: &Tree<P>, v: usize, visited: &mut [bool], rec_stack: &mut [bool]) -> bool {
+                dbg!(&visited);
+                dbg!(&rec_stack);
+                if !visited[v] {
+                    // Mark the current node as visited and part of recursion stack 
+                    visited[v] = true; 
+                    rec_stack[v] = true;
+
+                    if let Some(rows) = tree.get(&rules[v]) {
+                        // Recur for all the vertices adjacent to this vertex 
+                        for &i in &rows.1 {
+                            if rec_stack[i] || (!visited[i] && util(rules, tree, i, visited, rec_stack)) {
+                                return true
+                            }
+                        }
+                    }
+                }
+
+                rec_stack[v] = false;  // remove the vertex from recursion stack 
+                false
+            }
+
+            let tree = build_deps_tree(rules);
+
+            let mut visited = vec![false; rules.len()];
+            let mut rec_stack = vec![false; rules.len()];
+
+            for i in 0..rules.len() {
+                if util(rules, &tree, i, &mut visited, &mut rec_stack) {
+                    return None
+                }
+            }
+
+            Some(tree)
+        }
 
         let mut rules = self.rules.iter().cloned().collect::<Vec<_>>();
         let mut axioms = HashSet::default();
@@ -291,95 +370,52 @@ impl<P: Predicate> Solver<P> {
             axioms.extend(old_axioms);
         });
 
-        rules.sort_unstable_by_key(|x| match x {
+        let tree = find_cycles(&rules)?;
+
+        println!("TREE");
+
+        for (i, (r, _)) in &tree {
+            println!("{:?}", i);
+            for r in r {
+                println!("\t{:?}", r);
+            }
+        }
+
+        let to_key = |x: &Rule<P>| match x {
             Rule::Axiom(..) => 4,
             Rule::And(_) => 3,
             Rule::Implication(..) => 2,
             Rule::Quantifier(Quant::ForAll, ..) => 1,
             Rule::Quantifier(Quant::Exists, ..) => 0,
+        };
+
+        rules.sort_unstable_by(|x, y| {
+            let (kx, ky) = (to_key(x), to_key(y));
+            use std::cmp::Ordering;
+
+            match std::cmp::Ord::cmp(&kx, &ky) {
+                Ordering::Equal => (),
+                x => return x
+            }
+
+            dbg!((x, y));
+
+            match dbg!((
+                tree.get(x).map(|x| x.0.contains(&y)).unwrap_or(false),
+                tree.get(y).map(|y| y.0.contains(&x)).unwrap_or(false),
+            )) {
+                (true, true) => unreachable!(),
+                (false, false) => Ordering::Equal,
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+            }
         });
-
-        let mut forall_pos = None;
-        let mut exists_pos = None;
-
-        for (i, a) in rules.windows(2).enumerate() {
-            let i = i + 1;
-
-            let (a, b) = match a {
-                [a, b] => (a, b),
-                _ => unreachable!()
-            };
-
-            match dbg!((a, b)) {
-                (Rule::Quantifier(q, ..), Rule::Quantifier(r, ..)) if q == r => (),
-                (Rule::Quantifier(Quant::Exists, ..), _) => {
-                    exists_pos = Some(i);
-                },
-                (Rule::Quantifier(Quant::ForAll, ..), _) => {
-                    forall_pos = Some(i);
-                    break
-                },
-                _ => ()
-            }
-        }
-
-        fn sort_rules_and_find_cycle<P: Predicate>(rules: &mut [Rule<P>]) -> bool {
-            let mut found_cycle = false;
-            
-            rules.sort_by(|x, y| {
-                use std::cmp::Ordering;
-
-                if found_cycle {
-                    return Ordering::Equal;
-                }
-
-                dbg!(match dbg!((x, y)) {
-                    (
-                        Rule::Quantifier(_, _, box Rule::Implication(box [a, b])),
-                        Rule::Quantifier(_, _, box Rule::Implication(box [c, d]))
-                    ) => {
-                        match dbg!((d.contains(a), b.contains(c))) {
-                            (true, true) => {
-                                found_cycle = true;
-                                Ordering::Equal
-                            },
-                            (true, false) => Ordering::Less,
-                            (false, true) => Ordering::Greater,
-                            (false, false) => Ordering::Equal
-                        }
-                    },
-                    (Rule::Quantifier(..), Rule::Quantifier(..)) => {
-                        Ordering::Equal
-                    },
-                    _ => unreachable!()
-                })
-            });
-
-            found_cycle
-        }
-
-        match dbg!((exists_pos, forall_pos)) {
-            (Some(exists_pos), forall_pos) => {
-                sort_rules_and_find_cycle(&mut rules[..exists_pos]);
-
-                if let Some(forall_pos) = forall_pos {
-                    if sort_rules_and_find_cycle(&mut rules[exists_pos..forall_pos]) {
-                        return None;
-                    }
-                }
-            },
-            (None, Some(forall_pos)) => {
-                if sort_rules_and_find_cycle(&mut rules[..forall_pos]) {
-                    return None;
-                }
-            }
-            (None, None) => ()
-        }
 
         dbg!("-----------------------------------------------------------------------------------");
 
         dbg!(&rules);
-
+        let old_rules = rules.clone();
+        
         match rules.last() {
             Some(Rule::Implication(..)) | Some(Rule::Quantifier(..)) => {
                 for i in rules.iter() {
@@ -391,15 +427,29 @@ impl<P: Predicate> Solver<P> {
             _ => (),
         }
 
-        let known_variables = rules.iter().flat_map(Rule::items).collect();
+        let mut known_variables = rules.iter().flat_map(Rule::items).collect();
         let mut existential_assignments = HashMap::default();
 
-        is_consistent_inner::<NotExistential, _>(
+        println!("**********************************************************************************************");
+        println!("**********************************************************************************************");
+
+        dbg!(&rules);
+        dbg!(&known_variables);
+        
+        println!("**********************************************************************************************");
+        println!("**********************************************************************************************");
+
+        let ici = is_consistent_inner::<NotExistential, _>(
             &mut rules,
             &mut axioms,
-            &known_variables,
+            &mut known_variables,
             &mut existential_assignments,
-        )?;
+        );
+
+        dbg!(&old_rules);
+        dbg!(&known_variables);
+
+        ici?;
 
         Some(dbg!((axioms, existential_assignments)))
     }
@@ -456,31 +506,37 @@ impl<P: Predicate> Rule<P> {
             Rule::Quantifier(_, _, box rule) => rule.items(),
         }
     }
+}
 
-    fn contains(&self, rule: &Self) -> bool {
-        if self == rule {
-            true
-        } else {
-            match dbg!(self) {
-                Rule::And(box [a, b]) => a.contains(rule) || b.contains(rule),
-                Rule::Quantifier(_, _, r) => r.contains(rule),
-                Rule::Axiom(s) => {
-                    match dbg!(rule) {
-                        Rule::Axiom(r) => s.matches(r),
-                        | Rule::Implication(box [a, b])
-                        | Rule::And(box [a, b]) => self.contains(a) || self.contains(b),
-                        Rule::Quantifier(_, _, rule) => self.contains(rule)
-                    }
-                },
-                Rule::Implication(box [a, b]) => {
-                    match dbg!(rule) {
-                        | Rule::And(..)
-                        | Rule::Axiom(..) => a.contains(rule) || b.contains(rule),
-                        Rule::Implication(box [c, d]) => a.contains(c) && b.contains(d),
-                        Rule::Quantifier(_, _, rule) => a.contains(rule) || b.contains(rule),
-                    }
-                },
-            }
-        }
+impl<P: Predicate> Rule<P> {
+    fn is_dep(&self, rule: &Self) -> bool {
+        dbg!((self, rule));
+        let output = match self {
+            Rule::And(box [a, b]) => a.is_dep(rule) || b.is_dep(rule),
+            Rule::Axiom(s) => {
+                match rule {
+                    Rule::Axiom(r) => s.matches(r),
+                    Rule::Quantifier(_, _, r) => self.is_dep(r),
+                    Rule::Implication(box [a, b]) => self.is_dep(a),
+                    Rule::And(box [a, b]) => self.is_dep(a) || self.is_dep(b)
+                }
+            },
+            Rule::Quantifier(_, _, s) => match rule {
+                | Rule::Axiom(..)
+                | Rule::Implication(..) => s.is_dep(rule),
+
+                Rule::Quantifier(_, _, r) => s.is_dep(r),
+                Rule::And(box [a, b]) => s.is_dep(a) || s.is_dep(b)
+            },
+            Rule::Implication(box [a, b]) => match rule {
+                Rule::Axiom(..) => a.is_dep(rule),
+                Rule::And(box [c, d]) => a.is_dep(c) || a.is_dep(d),
+                Rule::Implication(box [c, d]) => a.is_dep(d) && !c.is_dep(b),
+                Rule::Quantifier(_, _, r) => self.is_dep(r)
+            },
+        };
+        dbg!((output, self, rule));
+
+        output
     }
 }
